@@ -1,0 +1,76 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # flake8-logging-format
+    "G",
+]
+ignore = [
+    # star imports
+    "F405",
+    "F403",
+    # lambda expression assignment
+    "E731",
+    # zip without strict=
+    "B905",
+    # loop control variable not used within loop body
+    "B007",
+    # f-string format
+    "UP032",
+    # vLLM Ascend compatibility
+    "B904",
+    "SIM108",
+    "SIM102",
+]
+logger-objects = ["vllm.logger.logger"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "scripts",
+    "tests",
+]
+ignore_missing_imports = true
+check_untyped_defs = true
+follow_imports = "silent"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+]
+markers = [
+    "integration: tests that require external services or heavyweight setup",
+    "npu: tests that require Ascend NPU hardware and runtime",
+    "slow: tests that are too expensive for the default local loop",
+]
