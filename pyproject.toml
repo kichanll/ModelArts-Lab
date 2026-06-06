@@ -70,6 +70,7 @@ addopts = [
     "--strict-markers",
 ]
 markers = [
+    "anyio: async tests executed by AnyIO's pytest plugin",
     "integration: tests that require external services or heavyweight setup",
     "npu: tests that require Ascend NPU hardware and runtime",
     "slow: tests that are too expensive for the default local loop",
