@@ -9,7 +9,6 @@ from typing import Any
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 LOGGING_CONFIG_PATH = ROOT / "tools" / "logging" / "update_logging_config.py"
 LOGGING_ENV_KEYS = (

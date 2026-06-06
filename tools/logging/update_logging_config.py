@@ -14,13 +14,14 @@
 用法:
     export VLLM_LOGGING_CONFIG_PATH=$(python update_logging_config.py --logging-file-name /path/to/server.log)
 """
+
 import argparse
+import glob
 import json
 import os
 import sys
 import tempfile
-import glob
-from typing import Dict, Any, Optional
+from typing import Any
 
 # 从环境变量或默认值获取配置
 # 这些变量在模块导入时读取，后续修改环境变量不会生效
@@ -58,7 +59,7 @@ def _use_color() -> bool:
     return False
 
 
-def _build_logging_config(log_file_name: str) -> Dict[str, Any]:
+def _build_logging_config(log_file_name: str) -> dict[str, Any]:
     """构建完整的日志配置字典。
 
     Args:
@@ -142,7 +143,7 @@ def delete_old_log_files(log_file_path: str) -> None:
         sys.stderr.write(f"警告: 删除日志文件时出错: {e}\n")
 
 
-def save_config(config: Dict[str, Any], output_path: Optional[str] = None) -> str:
+def save_config(config: dict[str, Any], output_path: str | None = None) -> str:
     """将配置字典保存为 JSON 文件。
 
     Args:
@@ -157,16 +158,19 @@ def save_config(config: Dict[str, Any], output_path: Optional[str] = None) -> st
     """
     if not output_path:
         try:
-            temp_file = tempfile.NamedTemporaryFile(
-                mode='w', suffix='.json', prefix='logging_config_', delete=False, encoding='utf-8'
-            )
-            output_path = temp_file.name
-            temp_file.close()
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".json",
+                prefix="logging_config_",
+                delete=False,
+                encoding="utf-8",
+            ) as temp_file:
+                output_path = temp_file.name
         except Exception as e:
             sys.exit(f"错误: 创建临时文件失败: {e}")
 
     try:
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
         return output_path
     except Exception as e:
@@ -205,5 +209,6 @@ def main():
 
 
 if __name__ == "__main__":
-    # 用法: export VLLM_LOGGING_CONFIG_PATH=$(python update_logging_config.py --logging-file-name ${LOG_PATH}/server_0.log)
+    # Usage:
+    # export VLLM_LOGGING_CONFIG_PATH=$(python update_logging_config.py --logging-file-name ${LOG_PATH}/server_0.log)
     sys.exit(main())

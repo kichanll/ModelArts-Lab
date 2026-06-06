@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 PARAM_CHECK_PATH = ROOT / "ascend-vllm" / "middleware" / "param_check.py"
 
@@ -83,10 +82,10 @@ def _install_external_dependency_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
             super().__init__(headers=headers, media_type=media_type, status_code=status_code)
             self.body_iterator = body_iterator
 
-    fastapi.Request = Request
-    fastapi.Response = Response
-    fastapi_responses.JSONResponse = JSONResponse
-    fastapi_responses.StreamingResponse = StreamingResponse
+    vars(fastapi)["Request"] = Request
+    vars(fastapi)["Response"] = Response
+    vars(fastapi_responses)["JSONResponse"] = JSONResponse
+    vars(fastapi_responses)["StreamingResponse"] = StreamingResponse
 
     starlette = _make_package("starlette")
     starlette_middleware = _make_package("starlette.middleware")
@@ -96,7 +95,7 @@ def _install_external_dependency_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
         def __init__(self, app: Any = None) -> None:
             self.app = app
 
-    starlette_middleware_base.BaseHTTPMiddleware = BaseHTTPMiddleware
+    vars(starlette_middleware_base)["BaseHTTPMiddleware"] = BaseHTTPMiddleware
 
     vllm = _make_package("vllm")
     vllm_entrypoints = _make_package("vllm.entrypoints")
@@ -142,15 +141,15 @@ def _install_external_dependency_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
     def init_logger(name: str) -> FakeLogger:
         return fake_logger
 
-    vllm_protocol.OpenAIBaseModel = OpenAIBaseModel
-    vllm_protocol.ErrorInfo = ErrorInfo
-    vllm_protocol.ErrorResponse = ErrorResponse
-    vllm_logger.init_logger = init_logger
+    vars(vllm_protocol)["OpenAIBaseModel"] = OpenAIBaseModel
+    vars(vllm_protocol)["ErrorInfo"] = ErrorInfo
+    vars(vllm_protocol)["ErrorResponse"] = ErrorResponse
+    vars(vllm_logger)["init_logger"] = init_logger
 
     vllm_ascend = _make_package("vllm_ascend")
     vllm_ascend_envs = types.ModuleType("vllm_ascend.envs")
-    vllm_ascend_envs.ENABLE_TRACE_LOG = False
-    vllm_ascend.envs = vllm_ascend_envs
+    vars(vllm_ascend_envs)["ENABLE_TRACE_LOG"] = False
+    vars(vllm_ascend)["envs"] = vllm_ascend_envs
 
     monkeypatch.setitem(sys.modules, "fastapi", fastapi)
     monkeypatch.setitem(sys.modules, "fastapi.responses", fastapi_responses)
@@ -336,9 +335,7 @@ def test_load_validators_from_json_accepts_single_and_list_configs(
                         {"validator_type": "value", "target_value": [0.5, 1.0]},
                     ]
                 },
-                "validators_json": {
-                    "legacy": {"validator_type": "incompatibility", "subfield": ["legacy"]}
-                },
+                "validators_json": {"legacy": {"validator_type": "incompatibility", "subfield": ["legacy"]}},
             }
         ),
         encoding="utf-8",

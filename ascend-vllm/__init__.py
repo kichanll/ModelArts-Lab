@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
+
 
 def register():
     """Register the PATCH NPU platform."""
@@ -20,6 +22,5 @@ def register():
 
 
 def register_model():
-    import ascend_vllm.patch.platform
-    import ascend_vllm.patch.worker
-    
+    importlib.import_module("ascend_vllm.patch.platform")
+    importlib.import_module("ascend_vllm.patch.worker")

@@ -14,16 +14,18 @@
 # limitations under the License.
 
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from vllm_ascend.platform import NPUPlatform
 from vllm_ascend.ascend_config import get_ascend_config
+from vllm_ascend.platform import NPUPlatform
+
 if TYPE_CHECKING:
     from vllm.config import VllmConfig
     from vllm.utils import FlexibleArgumentParser
 else:
     VllmConfig = None
     FlexibleArgumentParser = None
+
 
 class PatchNPUPlatform(NPUPlatform):
     @classmethod
@@ -33,13 +35,11 @@ class PatchNPUPlatform(NPUPlatform):
         parallel_config = vllm_config.parallel_config
         if parallel_config and not ascend_config.xlite_graph_config.enabled:
             parallel_config.worker_cls = "ascend_vllm.worker.worker_v1.NPUWorker"
-    
+
     @classmethod
-    def pre_register_and_update(
-        cls,
-        parser: Optional[FlexibleArgumentParser] = None
-    ) -> None:
+    def pre_register_and_update(cls, parser: FlexibleArgumentParser | None = None) -> None:
         super().pre_register_and_update(parser)
-        
+
         from ascend_vllm.utils import adapt_patch
+
         adapt_patch(is_global_patch=True)
