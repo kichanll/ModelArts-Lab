@@ -339,7 +339,7 @@ class SharedProxyScheduler:
                 else:
                     self.tainted_decoders.update(keys)
                 self._rebuild_heap_no_lock(instance_type)
-                logger.warning(f"Start to taint {instance_type} instances {sorted(keys)}.")
+                logger.warning("Start to taint %s instances %s.", instance_type, sorted(keys))
                 return True
 
             removed = False
@@ -699,12 +699,12 @@ async def send_request_to_service(
             await raise_for_upstream_status(response)
             return response
         except (httpx.RequestError, UpstreamHTTPStatusError) as exc:
-            logger.warning(f"Attempt {attempt} failed for {endpoint}: {exc}")
+            logger.warning("Attempt %s failed for %s: %s", attempt, endpoint, exc)
             last_exc = exc
             if attempt < max_retries:
                 await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
             else:
-                logger.error(f"All {max_retries} attempts failed for {endpoint}.")
+                logger.error("All %s attempts failed for %s.", max_retries, endpoint)
                 raise last_exc
 
 
@@ -728,20 +728,20 @@ async def stream_service_response_with_retry(
                 return
         except (httpx.RequestError, UpstreamHTTPStatusError) as exc:
             if attempt < max_retries:
-                logger.warning(f"Attempt {attempt} failed for streaming {endpoint}: {exc}")
+                logger.warning("Attempt %s failed for streaming %s: %s", attempt, endpoint, exc)
                 await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
             else:
-                logger.error(f"All {max_retries} attempts failed for streaming {endpoint}.")
+                logger.error("All %s attempts failed for streaming %s.", max_retries, endpoint)
                 raise exc
         except Exception as exc:
             if "first_chunk_sent" in locals() and first_chunk_sent:
-                logger.error(f"Streaming to client interrupted after response started: {exc}")
+                logger.error("Streaming to client interrupted after response started: %s", exc)
                 return
             if attempt < max_retries:
-                logger.warning(f"Attempt {attempt} failed for streaming {endpoint}: {exc}")
+                logger.warning("Attempt %s failed for streaming %s: %s", attempt, endpoint, exc)
                 await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
             else:
-                logger.error(f"All {max_retries} attempts failed for streaming {endpoint}.")
+                logger.error("All %s attempts failed for streaming %s.", max_retries, endpoint)
                 raise exc
 
 
@@ -767,19 +767,19 @@ async def open_stream_service_response_with_retry(
             if stream_entered:
                 await stream_cm.__aexit__(type(exc), exc, exc.__traceback__)
             if attempt < max_retries:
-                logger.warning(f"Attempt {attempt} failed for streaming {endpoint}: {exc}")
+                logger.warning("Attempt %s failed for streaming %s: %s", attempt, endpoint, exc)
                 await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
             else:
-                logger.error(f"All {max_retries} attempts failed for streaming {endpoint}.")
+                logger.error("All %s attempts failed for streaming %s.", max_retries, endpoint)
                 raise exc
         except Exception as exc:
             if stream_entered:
                 await stream_cm.__aexit__(type(exc), exc, exc.__traceback__)
             if attempt < max_retries:
-                logger.warning(f"Attempt {attempt} failed for streaming {endpoint}: {exc}")
+                logger.warning("Attempt %s failed for streaming %s: %s", attempt, endpoint, exc)
                 await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
             else:
-                logger.error(f"All {max_retries} attempts failed for streaming {endpoint}.")
+                logger.error("All %s attempts failed for streaming %s.", max_retries, endpoint)
                 raise exc
 
 
@@ -925,7 +925,7 @@ async def handle_completions_impl(api: str, request: Request):
                         try:
                             chunk_str = chunk.decode("utf-8").strip()
                         except UnicodeDecodeError:
-                            logger.debug(f"Skipping chunk: {chunk}")
+                            logger.debug("Skipping chunk: %s", chunk)
                             yield chunk
                             continue
                         if not chunk_str:
@@ -935,7 +935,7 @@ async def handle_completions_impl(api: str, request: Request):
                         try:
                             chunk_json = json.loads(chunk_str)
                         except json.JSONDecodeError:
-                            logger.debug(f"Skipping chunk: {chunk_str}")
+                            logger.debug("Skipping chunk: %s", chunk_str)
                             yield chunk
                             continue
                         choices = chunk_json.get("choices", [])
@@ -981,9 +981,13 @@ async def handle_completions_impl(api: str, request: Request):
                         yield chunk
             except Exception as exc:
                 logger.error(
-                    f"Error during streaming from decoder {instance_info.decoder['host']}:{instance_info.decoder['port']}: {exc} "
-                    f"the aborted request {instance_info.request_id} will be routed to the target prefiller "
-                    "when a new request is dispatched to it"
+                    "Error during streaming from decoder %s:%s: %s "
+                    "the aborted request %s will be routed to the target prefiller "
+                    "when a new request is dispatched to it",
+                    instance_info.decoder["host"],
+                    instance_info.decoder["port"],
+                    exc,
+                    instance_info.request_id,
                 )
                 scheduler.abort_prefiller_request(instance_info.prefiller_key, instance_info.request_id)
                 scheduler.release_prefiller_kv(instance_info.prefiller_key, instance_info.prefiller_score)
