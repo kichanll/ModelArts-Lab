@@ -13,14 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib
+from vllm_ascend.platform import NPUPlatform
 
 
-def register():
-    """Register the PATCH NPU platform."""
-    return "ascend_vllm.platform.PatchNPUPlatform"
-
-
-def register_model():
-    importlib.import_module("ascend_vllm.patch.platform")
-    importlib.import_module("ascend_vllm.patch.worker")
+class PatchNPUPlatform(NPUPlatform):
+    pass

@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PARAM_CHECK_PATH = ROOT / "ascend-vllm" / "middleware" / "param_check.py"
+PARAM_CHECK_PATH = ROOT / "ascend_vllm" / "middleware" / "param_check.py"
 
 
 @pytest.fixture

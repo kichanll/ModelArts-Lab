@@ -13,12 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib
+from vllm_ascend.utils import adapt_patch as _adapt_vllm_ascend_patch
 
 
 def adapt_patch(is_global_patch: bool = False):
-    if is_global_patch:
-        importlib.import_module("ascend_vllm.patch.platform")
-    else:
-        importlib.import_module("ascend_vllm.patch.worker")
-        importlib.import_module("ascend_vllm.ops")
+    _adapt_vllm_ascend_patch(is_global_patch=is_global_patch)
