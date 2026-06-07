@@ -20,6 +20,14 @@ ACTION = os.environ.get("ROLE", "")
 NOT_ALLOWED_COMPLETIONS = os.environ.get("NOT_ALLOWED_COMPLETIONS", "")
 
 
+def is_trace_log_enabled() -> bool:
+    trace_log_enabled = getattr(envs_ascend, "ENABLE_TRACE_LOG", None)
+    if trace_log_enabled is not None:
+        return bool(trace_log_enabled)
+
+    return os.getenv("ENABLE_TRACE_LOG", "0").lower() in ("1", "true", "yes", "on")
+
+
 class BaseValidator:
     def __init__(self, param_name: str, error_msg: str | None = None):
         self.param_name = param_name
@@ -302,7 +310,7 @@ class ValidateSamplingParams(BaseHTTPMiddleware):
     async def log_response_header_and_usage(self, request: Request, call_next):
         response: Response = await call_next(request)
 
-        if not envs_ascend.ENABLE_TRACE_LOG:
+        if not is_trace_log_enabled():
             return response
 
         x_span_id = request.headers.get("x-span-id", "")
