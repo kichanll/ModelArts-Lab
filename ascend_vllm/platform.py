@@ -13,8 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from vllm_ascend.platform import NPUPlatform
+from typing import TYPE_CHECKING, Optional
 
+from vllm_ascend.platform import NPUPlatform
+from vllm_ascend.ascend_config import get_ascend_config
+if TYPE_CHECKING:
+    from vllm.config import VllmConfig
+    from vllm.utils import FlexibleArgumentParser
+else:
+    VllmConfig= None
+    FlexibleArgumentParser = None
 
 class PatchNPUPlatform(NPUPlatform):
-    pass
+    @classmethod
+    def pre_register_and_update(cls,
+                                parset: Optional[FlexibleArgumentParser] = None
+                                ) -> None:
+        super().pre_reister_and_update(parser)
+        
+        from ascend_vllm.utils import adapt_patch
+        adapt_patch(is_global_patch=True)

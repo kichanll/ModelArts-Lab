@@ -1,0 +1,1 @@
+from ascend_vllm.patch.platform import patch_health
