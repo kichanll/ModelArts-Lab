@@ -4,7 +4,7 @@ from vllm.entrypoints.openai.chat_completion import serving as chat_serving
 from vllm.entrypoints.openai.chat_completion.serving import OpenAIServingChat
 from vllm.entrypoints.openai.engine import protocol as engine_protocol
 
-importlib.import_module("vllm_ascend.patch.platform.patch_minimax_usage_accouting")
+importlib.import_module("vllm_ascend.patch.platform.patch_minimax_usage_accounting")
 
 
 def _make_usage_info_without_completion_details(
@@ -21,7 +21,7 @@ def _make_usage_info_without_completion_details(
         num_cached_tokens=num_cached_tokens,
     )
 
-    if self.enable_prompt_token_details and num_cached_tokens:
+    if self.enable_prompt_tokens_details and num_cached_tokens:
         usage.prompt_token_details = chat_serving.PromptTokenUsageInfo(
             cached_tokens=num_cached_tokens,
         )

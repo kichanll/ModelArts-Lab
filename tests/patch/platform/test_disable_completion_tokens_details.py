@@ -60,7 +60,7 @@ def _make_full_response_usage(self, state):
 
 
 class OpenAIServingChat:
-    enable_prompt_token_details = False
+    enable_prompt_tokens_details = False
 
     def chat_completion_stream_generator(self, data, state):
         return _inject_stream_usage_details(data, state)
@@ -85,12 +85,12 @@ class OpenAIServingChat:
     vllm_ascend = _make_package("vllm_ascend")
     vllm_ascend_patch = _make_package("vllm_ascend.patch")
     vllm_ascend_patch_platform = _make_package("vllm_ascend.patch.platform")
-    minimax_patch = types.ModuleType("vllm_ascend.patch.platform.patch_minimax_usage_accouting")
+    minimax_patch = types.ModuleType("vllm_ascend.patch.platform.patch_minimax_usage_accounting")
 
     monkeypatch.setitem(sys.modules, "vllm_ascend", vllm_ascend)
     monkeypatch.setitem(sys.modules, "vllm_ascend.patch", vllm_ascend_patch)
     monkeypatch.setitem(sys.modules, "vllm_ascend.patch.platform", vllm_ascend_patch_platform)
-    monkeypatch.setitem(sys.modules, "vllm_ascend.patch.platform.patch_minimax_usage_accouting", minimax_patch)
+    monkeypatch.setitem(sys.modules, "vllm_ascend.patch.platform.patch_minimax_usage_accounting", minimax_patch)
 
     return chat_serving.__dict__["OpenAIServingChat"]
 
@@ -113,7 +113,7 @@ def test_make_usage_info_drops_completion_details_and_keeps_prompt_cache(
 ) -> None:
     module = _load_patch_module(monkeypatch)
     service = module.OpenAIServingChat()
-    service.enable_prompt_token_details = True
+    service.enable_prompt_tokens_details = True
 
     usage = service._make_usage_info(
         prompt_tokens=11,
@@ -134,7 +134,7 @@ def test_make_usage_info_omits_prompt_details_when_cache_is_empty(
 ) -> None:
     module = _load_patch_module(monkeypatch)
     service = module.OpenAIServingChat()
-    service.enable_prompt_token_details = True
+    service.enable_prompt_tokens_details = True
 
     usage = service._make_usage_info(
         prompt_tokens=11,
