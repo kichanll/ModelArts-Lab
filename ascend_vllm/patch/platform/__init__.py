@@ -1,1 +1,2 @@
 from ascend_vllm.patch.platform import patch_health
+from ascend_vllm.patch.platform import patch_disable_completion_tokens_details

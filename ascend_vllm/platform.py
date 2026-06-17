@@ -27,9 +27,9 @@ else:
 class PatchNPUPlatform(NPUPlatform):
     @classmethod
     def pre_register_and_update(cls,
-                                parset: Optional[FlexibleArgumentParser] = None
+                                parser: Optional[FlexibleArgumentParser] = None
                                 ) -> None:
-        super().pre_reister_and_update(parser)
+        super().pre_register_and_update(parser)
         
         from ascend_vllm.utils import adapt_patch
         adapt_patch(is_global_patch=True)
