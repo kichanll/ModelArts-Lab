@@ -15,7 +15,6 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from vllm_ascend.ascend_config import get_ascend_config  # noqa: F401
 from vllm_ascend.platform import NPUPlatform
 
 if TYPE_CHECKING:
@@ -28,9 +27,10 @@ else:
 
 class PatchNPUPlatform(NPUPlatform):
     @classmethod
-    def pre_register_and_update(cls, parser: Optional[FlexibleArgumentParser] = None) -> None:  # noqa: UP045
+    def pre_register_and_update(cls,
+                                parser: Optional[FlexibleArgumentParser] = None
+                                ) -> None:
         super().pre_register_and_update(parser)
 
         from ascend_vllm.utils import adapt_patch
-
         adapt_patch(is_global_patch=True)
