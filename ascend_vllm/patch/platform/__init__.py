@@ -6,4 +6,3 @@ from ascend_vllm.patch.platform import (
 from ascend_vllm.patch.platform import (
     patch_recompute_scheduler as patch_recompute_scheduler,
 )
-
