@@ -13,9 +13,9 @@ pip install cloud_turbo_ops-26.0.2+torch2.9.0.$MACHINE_TYPE-cp311-cp311-linux_aa
 # 安装MindIE-SD
 cd $INFER_WORKSPACE/ascendx_video
 git clone https://gitcode.com/Ascend/MindIE-SD.git && cd MindIE-SD
-git checkout eaccd2142df164f37a8f622d02c493ad3ea0854d 
-python setup.py bdist_wheel 
-cd dist 
+git checkout eaccd2142df164f37a8f622d02c493ad3ea0854d
+python setup.py bdist_wheel
+cd dist
 pip install mindiesd-*.whl
 cp ../mindiesd/plugin/libPTAExtensionOPS.so $INFER_WORKSPACE/ascendx_video
 

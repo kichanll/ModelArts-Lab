@@ -25,7 +25,7 @@ class TestAscendCogVideoXCausalConv3d:
         kernel_size = 3
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,) * 3
-        
+
         assert kernel_size == (3, 3, 3)
 
     def test_init_kernel_size_tuple(self):
@@ -33,7 +33,7 @@ class TestAscendCogVideoXCausalConv3d:
         kernel_size = (3, 1, 1)
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,) * 3
-        
+
         assert kernel_size == (3, 1, 1)
 
     def test_padding_calculation(self):
@@ -41,12 +41,12 @@ class TestAscendCogVideoXCausalConv3d:
         kernel_size = (3, 3, 3)
         dilation = 1
         stride = 1
-        
+
         time_kernel_size, height_kernel_size, width_kernel_size = kernel_size
         time_pad = dilation * (time_kernel_size - 1) + (1 - stride)
         height_pad = height_kernel_size // 2
         width_pad = width_kernel_size // 2
-        
+
         assert time_pad == 2
         assert height_pad == 1
         assert width_pad == 1
@@ -56,10 +56,10 @@ class TestAscendCogVideoXCausalConv3d:
         width_pad = 1
         height_pad = 1
         time_pad = 2
-        
+
         # F.pad order: (W_left, W_right, H_left, H_right, T_left, T_right)
         time_causal_padding = (width_pad, width_pad, height_pad, height_pad, time_pad, 0)
-        
+
         assert time_causal_padding == (1, 1, 1, 1, 2, 0)
 
     def test_fake_context_parallel_forward_no_cache(self):
@@ -67,21 +67,21 @@ class TestAscendCogVideoXCausalConv3d:
         kernel_size = 3
         conv_cache = None
         inputs = torch.randn(1, 64, 5, 60, 104)
-        
+
         if kernel_size > 1:
             cached_inputs = [conv_cache] if conv_cache is not None else [inputs[:, :, :1]] * (kernel_size - 1)
             inputs_padded = torch.cat(cached_inputs + [inputs], dim=2)
-        
+
         assert inputs_padded.shape[2] == inputs.shape[2] + kernel_size - 1
 
     def test_forward_conv_cache_update(self):
         """Test conv_cache update in forward."""
         time_kernel_size = 3
         inputs = torch.randn(1, 64, 5, 60, 104)
-        
+
         # conv_cache is last (time_kernel_size - 1) frames
         conv_cache = inputs[:, :, -time_kernel_size + 1:].clone()
-        
+
         assert conv_cache.shape == (1, 64, 2, 60, 104)
 
 
@@ -111,10 +111,10 @@ class TestAscendAutoencoderKLCogVideoXConfig:
         """Test tile sample minimum values."""
         sample_height = 480
         sample_width = 720
-        
+
         tile_sample_min_height = sample_height // 3
         tile_sample_min_width = sample_width // 5
-        
+
         assert tile_sample_min_height == 160
         assert tile_sample_min_width == 144
 
@@ -122,23 +122,23 @@ class TestAscendAutoencoderKLCogVideoXConfig:
         """Test tile latent minimum size calculation."""
         tile_sample_min_size = 128
         block_out_channels = (128, 256, 256, 512)
-        
+
         tile_latent_min_size = int(tile_sample_min_size / (2 ** (len(block_out_channels) - 1)))
-        
+
         assert tile_latent_min_size == 16
 
     def test_num_frames_batch_size(self):
         """Test batch sizes for frames."""
         num_latent_frames_batch_size = 2
         num_sample_frames_batch_size = 8
-        
+
         assert num_latent_frames_batch_size == 2
         assert num_sample_frames_batch_size == 8
 
     def test_max_shape_decode(self):
         """Test max shape for decode padding."""
         max_shape_decode = (1, 3, 49, 160, 144)
-        
+
         assert max_shape_decode == (1, 3, 49, 160, 144)
 
     def test_overlap_factors(self):
@@ -178,23 +178,23 @@ class TestQuantConv:
     def test_quant_conv_disabled(self):
         """Test quant conv when disabled."""
         use_quant_conv = False
-        
+
         if use_quant_conv:
             quant_conv = "Conv3d"
         else:
             quant_conv = None
-        
+
         assert quant_conv is None
 
     def test_post_quant_conv_disabled(self):
         """Test post quant conv when disabled."""
         use_post_quant_conv = False
-        
+
         if use_post_quant_conv:
             post_quant_conv = "Conv3d"
         else:
             post_quant_conv = None
-        
+
         assert post_quant_conv is None
 
 

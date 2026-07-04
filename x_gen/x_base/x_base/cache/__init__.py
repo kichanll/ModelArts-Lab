@@ -79,28 +79,28 @@ from .models import (
 # ============ 高层封装函数 ============
 def cache_on_pipe(pipe, args):
     """将 Cache 加速应用到 pipeline
-    
+
     根据 turbo_mode 选择合适的加速策略：
     - "faiz" / "teacache": TeaCache 加速
     - "next_faiz" / "magcache": MagCache 加速
     - None: 不加速，返回原 pipe
-    
+
     Args:
         pipe: DiffusionPipeline 实例
         args: 参数对象，需包含 turbo_mode, model 等属性
-        
+
     Returns:
         应用了加速策略的 pipe（同一实例）
     """
     import importlib
-    
+
     # 检查 turbo_mode
     if args.turbo_mode is None:
         return pipe
-    
+
     # 获取 pipeline 类型
     pipeline_name = pipe.__class__.__name__
-    
+
     # 映射到对应的适配器模块
     adapter_map = {
         "WanPipeline": "wan",
@@ -108,11 +108,11 @@ def cache_on_pipe(pipe, args):
         "HunyuanVideoPipeline": "hunyuan",
         "CogVideoXPipeline": "cogvideox",
     }
-    
+
     adapter_name = adapter_map.get(pipeline_name)
     if adapter_name is None:
         raise ValueError(f"Unknown pipeline class name: {pipeline_name}")
-    
+
     # 动态导入对应的模型模块
     try:
         adapter_module = importlib.import_module(f"x_base.cache.models.{adapter_name}")
@@ -127,10 +127,10 @@ def cache_on_pipe(pipe, args):
     else:
         # 未知模式，返回原 pipe
         return pipe
-    
+
     if init_func is None:
         return pipe
-    
+
     init_func(pipe, args)
     return pipe
 

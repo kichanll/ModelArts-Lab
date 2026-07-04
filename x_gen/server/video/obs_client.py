@@ -77,7 +77,7 @@ class ObsStorageClient:
             time.sleep(0.3)
         logger.warning("等待对象存储文件可访问超时")
         return False
-    
+
     def save_to_obs(self, image_name, image):
         """
         保存文件到OBS
@@ -91,20 +91,20 @@ class ObsStorageClient:
             objectKey=file_path,
             content=image,
         )
-        
+
     def close(self):
         """
         关闭OBS客户端连接
         """
         if self.client:
             self.client.close()
-    
+
     def __enter__(self):
         """
         上下文管理器入口
         """
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """
         上下文管理器退出时自动关闭连接

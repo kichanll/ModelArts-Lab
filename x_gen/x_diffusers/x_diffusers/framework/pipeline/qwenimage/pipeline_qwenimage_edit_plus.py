@@ -5,7 +5,7 @@ from diffusers.utils import logging
 from diffusers.pipelines import QwenImageEditPlusPipeline
 from diffusers.image_processor import PipelineImageInput
 from diffusers.pipelines.qwenimage.pipeline_qwenimage_edit_plus import (
-    calculate_shift, retrieve_timesteps, calculate_dimensions, 
+    calculate_shift, retrieve_timesteps, calculate_dimensions,
     CONDITION_IMAGE_SIZE, VAE_IMAGE_SIZE,
 )
 from diffusers.pipelines.qwenimage.pipeline_output import QwenImagePipelineOutput
@@ -25,7 +25,7 @@ def _get_encode_image(pipeline, image):
     """Get condition images for encode_prompt."""
     if image is None or (isinstance(image, torch.Tensor) and image.size(1) == pipeline.latent_channels):
         return None
-    
+
     images = image if isinstance(image, list) else [image]
     condition_images = []
     for img in images:
@@ -52,21 +52,21 @@ def _prepare_latents_data(pipeline, image, batch_size, num_images_per_prompt,
             vae_images.append(
                 pipeline.image_processor.preprocess(img, vae_height, vae_width).unsqueeze(2)
             )
-    
+
     # Prepare latents
     num_channels_latents = pipeline.transformer.config.in_channels // 4
     latents, image_latents = pipeline.prepare_latents(
         vae_images, batch_size * num_images_per_prompt,
         num_channels_latents, height, width, dtype, device, generator, latents,
     )
-    
+
     # Prepare img_shapes
     img_shapes = [[
         (1, height // pipeline.vae_scale_factor // 2, width // pipeline.vae_scale_factor // 2),
-        *[(1, h // pipeline.vae_scale_factor // 2, w // pipeline.vae_scale_factor // 2) 
+        *[(1, h // pipeline.vae_scale_factor // 2, w // pipeline.vae_scale_factor // 2)
           for w, h in vae_image_sizes],
     ]] * batch_size
-    
+
     return latents, img_shapes, {"image_latents": image_latents}
 
 

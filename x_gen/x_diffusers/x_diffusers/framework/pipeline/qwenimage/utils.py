@@ -78,7 +78,7 @@ def apply_cfg(
 ) -> torch.Tensor:
     """Apply classifier-free guidance with normalization."""
     comb_pred = neg_noise_pred + true_cfg_scale * (noise_pred - neg_noise_pred)
-    
+
     cond_norm = torch.norm(noise_pred, dim=-1, keepdim=True)
     noise_norm = torch.norm(comb_pred, dim=-1, keepdim=True)
     return comb_pred * (cond_norm / noise_norm)
@@ -92,7 +92,7 @@ def apply_cfg_parallel(
     """Apply CFG in parallel mode with all_gather."""
     noise_pred_temp = cfg_group.all_gather(noise_pred, dim=0)
     comb_pred = noise_pred_temp[1] + true_cfg_scale * (noise_pred_temp[0] - noise_pred_temp[1])
-    
+
     cond_norm = torch.norm(noise_pred_temp[0], dim=-1, keepdim=True)
     noise_norm = torch.norm(comb_pred, dim=-1, keepdim=True)
     return comb_pred * (cond_norm / noise_norm)
@@ -104,7 +104,7 @@ def apply_cfg_parallel(
 
 class PipelineConfig:
     """Configuration for different pipeline types."""
-    
+
     def __init__(
         self,
         needs_image: bool = False,
@@ -148,7 +148,7 @@ def init_pipeline_state(
     attention_kwargs: dict[str, Any] | None,
 ) -> None:
     """Initialize pipeline internal state.
-    
+
     Args:
         pipeline: Pipeline instance
         guidance_scale: Guidance scale value
@@ -167,13 +167,13 @@ def get_cfg_setup(
     negative_prompt_embeds_mask: torch.Tensor | None,
 ) -> tuple[bool, bool]:
     """Get CFG setup parameters.
-    
+
     Args:
         true_cfg_scale: CFG scale value
         negative_prompt: Negative prompt text
         negative_prompt_embeds: Pre-computed negative prompt embeddings
         negative_prompt_embeds_mask: Negative prompt embeddings mask
-        
+
     Returns:
         Tuple of (has_neg_prompt, do_true_cfg)
     """
@@ -202,7 +202,7 @@ def encode_prompts_with_cfg(
     condition_images=None,
 ) -> tuple:
     """Encode prompts with CFG parallel support.
-    
+
     Args:
         pipeline: Pipeline instance with encode_prompt method
         cfg_parallel_size: CFG parallel size (1 or 2)
@@ -218,9 +218,9 @@ def encode_prompts_with_cfg(
         negative_prompt_embeds_mask: Negative prompt embeddings mask
         image: Image for encode_prompt (for edit pipelines)
         condition_images: Condition images for encode_prompt (for edit_plus pipeline)
-        
+
     Returns:
-        Tuple of (prompt_embeds, prompt_embeds_mask, negative_prompt_embeds, 
+        Tuple of (prompt_embeds, prompt_embeds_mask, negative_prompt_embeds,
                   negative_prompt_embeds_mask, local_rank)
     """
     # Prepare encode_prompt kwargs
@@ -236,11 +236,11 @@ def encode_prompts_with_cfg(
         encode_kwargs["image"] = image
     if condition_images is not None:
         encode_kwargs["image"] = condition_images
-    
+
     if cfg_parallel_size == 1:
         local_rank = 0
         prompt_embeds, prompt_embeds_mask = pipeline.encode_prompt(**encode_kwargs)
-        
+
         if do_true_cfg:
             neg_encode_kwargs = encode_kwargs.copy()
             neg_encode_kwargs["prompt"] = negative_prompt
@@ -250,7 +250,7 @@ def encode_prompts_with_cfg(
         else:
             negative_prompt_embeds = None
             negative_prompt_embeds_mask = None
-            
+
     elif cfg_parallel_size == 2:
         if not do_true_cfg:
             has_neg_prompt = get_has_neg_prompt(
@@ -260,24 +260,24 @@ def encode_prompts_with_cfg(
                 f"CFG parallel size is {cfg_parallel_size} must need 'true_cfg_scale > 1 and has_neg_prompt', "
                 f"but true_cfg_scale <= 1 or has_neg_prompt is {has_neg_prompt}"
             )
-        
+
         local_rank = dist.get_rank()
         if local_rank == 1:
             prompt = negative_prompt
             prompt_embeds = negative_prompt_embeds
             prompt_embeds_mask = negative_prompt_embeds_mask
-        
+
         encode_kwargs["prompt"] = prompt
         encode_kwargs["prompt_embeds"] = prompt_embeds
         encode_kwargs["prompt_embeds_mask"] = prompt_embeds_mask
         prompt_embeds, prompt_embeds_mask = pipeline.encode_prompt(**encode_kwargs)
-        
+
         # For parallel CFG, negative embeds will be gathered from other ranks
         negative_prompt_embeds = None
         negative_prompt_embeds_mask = None
     else:
         raise ValueError(f"Invalid cfg_parallel_size: {cfg_parallel_size}, must be 1 or 2")
-    
+
     return (
         prompt_embeds,
         prompt_embeds_mask,
@@ -328,7 +328,7 @@ def prepare_timesteps_and_guidance(
     retrieve_timesteps_fn=None,
 ) -> tuple:
     """Prepare timesteps and guidance for pipeline.
-    
+
     Args:
         pipeline: Pipeline instance
         num_inference_steps: Number of inference steps
@@ -338,7 +338,7 @@ def prepare_timesteps_and_guidance(
         sigmas: Optional sigmas
         calculate_shift_fn: Calculate shift function
         retrieve_timesteps_fn: Retrieve timesteps function
-        
+
     Returns:
         Tuple of (timesteps, num_inference_steps, num_warmup_steps, guidance)
     """
@@ -348,9 +348,9 @@ def prepare_timesteps_and_guidance(
         retrieve_timesteps_fn=retrieve_timesteps_fn,
     )
     pipeline._num_timesteps = len(timesteps)
-    
+
     guidance = handle_guidance(pipeline.transformer, guidance_scale, latents, device)
-    
+
     return timesteps, num_inference_steps, num_warmup_steps, guidance
 
 
@@ -389,7 +389,7 @@ def finalize_output(
     """Finalize pipeline output."""
     image = decode_latents_to_image(pipeline, latents, height, width, output_type)
     pipeline.maybe_free_model_hooks()
-    
+
     if not return_dict:
         return (image,)
     return output_class(images=image)
@@ -435,7 +435,7 @@ def run_qwenimage_pipeline_core(
     output_class=None,
 ):
     """Core pipeline runner - handles common logic for all QwenImage pipelines.
-    
+
     Args:
         pipeline: Pipeline instance
         config: PipelineConfig describing pipeline characteristics
@@ -443,7 +443,7 @@ def run_qwenimage_pipeline_core(
         prepare_latents_data_fn: Callable to prepare latents, returns (latents, img_shapes, extra_data)
         get_encode_image_fn: Callable to get image for encode_prompt
         ... (other args same as pipeline __call__)
-        
+
     Returns:
         Final output (image tuple or output class instance)
     """
@@ -472,7 +472,7 @@ def run_qwenimage_pipeline_core(
 
     # 4. Calculate batch size and device
     batch_size = get_batch_size(prompt, prompt_embeds)
-    
+
     # Check batch size limit
     if config.batch_size_limit is not None and batch_size > config.batch_size_limit:
         raise ValueError(
@@ -525,7 +525,7 @@ def run_qwenimage_pipeline_core(
             num_channels_latents, height, width,
             prompt_embeds.dtype, device, generator, latents,
         )
-        img_shapes = [[(1, height // pipeline.vae_scale_factor // 2, 
+        img_shapes = [[(1, height // pipeline.vae_scale_factor // 2,
                         width // pipeline.vae_scale_factor // 2)]] * batch_size
         extra_data = {}
 
@@ -587,10 +587,10 @@ def decode_latents_to_image(
     """Decode latents to image using VAE."""
     if output_type == "latent":
         return latents
-    
+
     latents = pipeline._unpack_latents(latents, height, width, pipeline.vae_scale_factor)
     latents = latents.to(pipeline.vae.dtype)
-    
+
     latents_mean = (
         torch.tensor(pipeline.vae.config.latents_mean)
         .view(1, pipeline.vae.config.z_dim, 1, 1, 1)
@@ -602,7 +602,7 @@ def decode_latents_to_image(
     latents = latents / latents_std + latents_mean
     image = pipeline.vae.decode(latents, return_dict=False)[0][:, :, 0]
     image = pipeline.image_processor.postprocess(image, output_type=output_type)
-    
+
     return image
 
 
@@ -638,10 +638,10 @@ def _run_single_gpu_step(
             attention_kwargs=attn_kwargs,
             return_dict=False,
         )[0]
-    
+
     if noise_pred_postprocess is not None:
         noise_pred = noise_pred_postprocess(noise_pred, latents)
-    
+
     if do_true_cfg:
         with pipeline.transformer.cache_context("uncond"):
             neg_noise_pred = pipeline.transformer(
@@ -654,12 +654,12 @@ def _run_single_gpu_step(
                 attention_kwargs=attn_kwargs,
                 return_dict=False,
             )[0]
-        
+
         if noise_pred_postprocess is not None:
             neg_noise_pred = noise_pred_postprocess(neg_noise_pred, latents)
-        
+
         noise_pred = apply_cfg(noise_pred, neg_noise_pred, true_cfg_scale)
-    
+
     return noise_pred
 
 
@@ -690,11 +690,11 @@ def _run_parallel_cfg_step(
             attention_kwargs=attn_kwargs,
             return_dict=False,
         )[0]
-        
+
         if noise_pred_postprocess is not None:
             noise_pred = noise_pred_postprocess(noise_pred, latents)
         torch.cuda.synchronize()
-    
+
     return apply_cfg_parallel(noise_pred, true_cfg_scale, get_cfg_group())
 
 
@@ -710,7 +710,7 @@ def _handle_callback(
     """Handle step end callback."""
     if callback_on_step_end is None:
         return latents, prompt_embeds
-    
+
     callback_kwargs = {k: locals()[k] for k in callback_tensor_inputs}
     callback_outputs = callback_on_step_end(pipeline, i, t, callback_kwargs)
     latents = callback_outputs.pop("latents", latents)
@@ -748,10 +748,10 @@ def run_denoising_loop(
     attention_kwargs: dict[str, Any] | None = None,
 ):
     """Run the denoising loop."""
-    
+
     callback_inputs = callback_on_step_end_tensor_inputs if callback_on_step_end_tensor_inputs is not None else ["latents"]
     pipeline.scheduler.set_begin_index(0)
-    
+
     with pipeline.progress_bar(total=num_inference_steps) as progress_bar:
         for i, t in enumerate(timesteps):
             if pipeline.interrupt:
@@ -766,7 +766,7 @@ def run_denoising_loop(
 
             # Broadcast timestep
             timestep = t.expand(latents.shape[0]).to(latents.dtype)
-            
+
             # Get attention kwargs
             attn_kwargs = attention_kwargs if attention_kwargs is not None else {}
 

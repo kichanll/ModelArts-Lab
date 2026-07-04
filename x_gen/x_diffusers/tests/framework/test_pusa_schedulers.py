@@ -115,7 +115,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test initialization with default parameters."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa()
-        
+
         assert scheduler.num_train_timesteps == 1000
         assert scheduler.shift == 3.0
         assert scheduler.sigma_max == 1.0
@@ -137,7 +137,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
             extra_one_step=True,
             reverse_sigmas=True,
         )
-        
+
         assert scheduler.num_train_timesteps == 1000
         assert scheduler.shift == 5.0
         assert scheduler.sigma_max == 2.0
@@ -162,7 +162,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa()
         scheduler.set_timesteps(num_inference_steps=50, denoising_strength=0.8)
-        
+
         assert len(scheduler.sigmas) == 50
 
     def test_set_timesteps_with_shift(self, pusa_scheduler_classes):
@@ -170,7 +170,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa()
         scheduler.set_timesteps(num_inference_steps=50, shift=10.0)
-        
+
         assert scheduler.shift == 10.0
 
     def test_set_timesteps_extra_one_step(self, pusa_scheduler_classes):
@@ -178,7 +178,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(extra_one_step=True)
         scheduler.set_timesteps(num_inference_steps=50)
-        
+
         assert len(scheduler.sigmas) == 50
 
     def test_set_timesteps_inverse_timesteps(self, pusa_scheduler_classes):
@@ -187,10 +187,10 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(inverse_timesteps=False)
         scheduler.set_timesteps(num_inference_steps=50)
         normal_sigmas = scheduler.sigmas.clone()
-        
+
         scheduler_inv = FlowMatchEulerDiscreteSchedulerPusa(inverse_timesteps=True)
         scheduler_inv.set_timesteps(num_inference_steps=50)
-        
+
         assert torch.allclose(scheduler_inv.sigmas, torch.flip(normal_sigmas, dims=[0]))
 
     def test_set_timesteps_reverse_sigmas(self, pusa_scheduler_classes):
@@ -199,10 +199,10 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(reverse_sigmas=False)
         scheduler.set_timesteps(num_inference_steps=50)
         normal_sigmas = scheduler.sigmas.clone()
-        
+
         scheduler_rev = FlowMatchEulerDiscreteSchedulerPusa(reverse_sigmas=True)
         scheduler_rev.set_timesteps(num_inference_steps=50)
-        
+
         assert torch.allclose(scheduler_rev.sigmas, 1 - normal_sigmas)
 
     def test_set_timesteps_training_mode(self, pusa_scheduler_classes):
@@ -210,7 +210,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa()
         scheduler.set_timesteps(num_inference_steps=50, training=True)
-        
+
         assert hasattr(scheduler, 'linear_timesteps_weights')
         assert scheduler.linear_timesteps_weights is not None
         assert len(scheduler.linear_timesteps_weights) == 50
@@ -219,13 +219,13 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test step with scalar timestep (0D tensor becomes 1D)."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         model_output = torch.randn(2, 3, 4, 4)
         sample = torch.randn(2, 3, 4, 4)
         timestep = scheduler.timesteps[5].unsqueeze(0)
-        
+
         prev_sample = scheduler.step(model_output, timestep, sample)
-        
+
         assert isinstance(prev_sample, torch.Tensor)
         assert prev_sample.shape == sample.shape
 
@@ -233,13 +233,13 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test step with 1D tensor timestep."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         model_output = torch.randn(2, 3, 4, 4)
         sample = torch.randn(2, 3, 4, 4)
         timestep = scheduler.timesteps[5].unsqueeze(0)
-        
+
         prev_sample = scheduler.step(model_output, timestep, sample)
-        
+
         assert isinstance(prev_sample, torch.Tensor)
         assert prev_sample.shape == sample.shape
 
@@ -247,15 +247,15 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test step with 2D tensor timestep (per-frame timesteps)."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         batch_size = 1
         frames = 4
         model_output = torch.randn(batch_size, 3, frames, 4, 4)
         sample = torch.randn(batch_size, 3, frames, 4, 4)
         timestep = scheduler.timesteps[5:9].unsqueeze(0)
-        
+
         prev_sample = scheduler.step(model_output, timestep, sample)
-        
+
         assert isinstance(prev_sample, torch.Tensor)
         assert prev_sample.shape == sample.shape
 
@@ -263,35 +263,35 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test step with to_final=True."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         model_output = torch.randn(2, 3, 4, 4)
         sample = torch.randn(2, 3, 4, 4)
         timestep = scheduler.timesteps[9]
-        
+
         prev_sample = scheduler.step(model_output, timestep, sample, to_final=True)
-        
+
         assert isinstance(prev_sample, torch.Tensor)
 
     def test_step_with_cond_frame_latent_indices(self, pusa_scheduler_classes):
         """Test step with conditioning frame latent indices."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         batch_size = 1
         frames = 5
         model_output = torch.randn(batch_size, 3, frames, 4, 4)
         sample = torch.randn(batch_size, 3, frames, 4, 4)
         timestep = scheduler.timesteps[5:10].unsqueeze(0)
-        
+
         cond_frame_latent_indices = [0, 4]
         noise_multipliers = {0: 0.5, 4: 0.8}
-        
+
         prev_sample = scheduler.step(
             model_output, timestep, sample,
             cond_frame_latent_indices=cond_frame_latent_indices,
             noise_multipliers=noise_multipliers
         )
-        
+
         assert isinstance(prev_sample, torch.Tensor)
         assert prev_sample.shape == sample.shape
 
@@ -299,28 +299,28 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test step handles device correctly."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         model_output = torch.randn(2, 3, 4, 4)
         sample = torch.randn(2, 3, 4, 4)
         timestep = scheduler.timesteps[5]
-        
+
         prev_sample = scheduler.step(model_output, timestep, sample)
-        
+
         assert prev_sample.device == sample.device
 
     def test_add_noise_for_conditioning_frames_scalar_timestep(self, pusa_scheduler_classes):
         """Test add_noise_for_conditioning_frames with scalar timestep."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         original_samples = torch.randn(2, 3, 4, 4)
         noise = torch.randn(2, 3, 4, 4)
         timestep = scheduler.timesteps[5].unsqueeze(0)
-        
+
         noisy_samples = scheduler.add_noise_for_conditioning_frames(
             original_samples, noise, timestep
         )
-        
+
         assert isinstance(noisy_samples, torch.Tensor)
         assert noisy_samples.shape == original_samples.shape
 
@@ -328,18 +328,18 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test add_noise_for_conditioning_frames with 2D tensor timestep."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         batch_size = 1
         frames = 4
         original_samples = torch.randn(batch_size, 3, frames, 4, 4)
         noise = torch.randn(batch_size, 3, frames, 4, 4)
         timestep = scheduler.timesteps[5:9].unsqueeze(0)
         noise_multiplier = 1.0
-        
+
         noisy_samples = scheduler.add_noise_for_conditioning_frames(
             original_samples, noise, timestep, noise_multiplier=noise_multiplier
         )
-        
+
         assert isinstance(noisy_samples, torch.Tensor)
         assert noisy_samples.shape == original_samples.shape
 
@@ -347,18 +347,18 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test add_noise_for_conditioning_frames with noise_multiplier."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=10)
-        
+
         batch_size = 1
         frames = 4
         original_samples = torch.randn(batch_size, 3, frames, 4, 4)
         noise = torch.randn(batch_size, 3, frames, 4, 4)
         timestep = scheduler.timesteps[5:9].unsqueeze(0)
         noise_multiplier = 0.5
-        
+
         noisy_samples = scheduler.add_noise_for_conditioning_frames(
             original_samples, noise, timestep, noise_multiplier=noise_multiplier
         )
-        
+
         assert isinstance(noisy_samples, torch.Tensor)
         assert noisy_samples.shape == original_samples.shape
 
@@ -426,7 +426,7 @@ class TestSchedulerIntegration:
         """Test that sigmas are monotonically decreasing by default."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=50)
-        
+
         for i in range(len(scheduler.sigmas) - 1):
             assert scheduler.sigmas[i] > scheduler.sigmas[i + 1]
 
@@ -434,6 +434,6 @@ class TestSchedulerIntegration:
         """Test that timesteps are correctly derived from sigmas."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa(num_inference_steps=50)
-        
+
         expected_timesteps = scheduler.sigmas * scheduler.num_train_timesteps
         assert torch.allclose(scheduler.timesteps, expected_timesteps)

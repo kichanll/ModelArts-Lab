@@ -26,10 +26,10 @@ class MockNPUStream:
     def __init__(self, device=None, priority=0):
         self.device = device
         self.priority = priority
-    
+
     def wait_stream(self, other_stream):
         pass
-    
+
     def synchronize(self):
         pass
 
@@ -41,81 +41,81 @@ class MockNPUEvent:
         self.blocking = blocking
         self.interprocess = interprocess
         self._recorded = False
-    
+
     def record(self, stream=None):
         self._recorded = True
         self.stream = stream  # 记录关联的流
-    
+
     def wait(self, stream=None):
         pass
-    
+
     def query(self):
         return self._recorded
-    
+
     def elapsed_time(self, end_event):
         return 0.0
-    
+
     def synchronize(self):
         pass
 
 
 class MockNPUModule:
     """Mock for torch_npu module"""
-    
+
     def __init__(self):
         self._streams = {}
         self._current_stream = MockNPUStream()
-    
+
     def Stream(self, device=None, priority=0):
         return MockNPUStream(device, priority)
-    
+
     def Event(self, enable_timing=False, blocking=False, interprocess=False):
         return MockNPUEvent(enable_timing, blocking, interprocess)
-    
+
     def current_stream(self, device=None):
         if device is None:
             device = self._current_stream.device
         if device not in self._streams:
             self._streams[device] = MockNPUStream(device=device)
         return self._streams[device]
-    
+
     def synchronize(self, device=None):
         pass
-    
+
     def is_available(self):
         return True
-    
+
     def device_count(self):
         return 8  # Simulate 8 NPU devices
-    
+
     def set_device(self, device):
         pass
-    
+
     def get_device_name(self, device=None):
         return "Ascend910B"
-    
+
     def get_device_capability(self, device=None):
         return (9, 10)
-    
+
     def memory_allocated(self, device=None):
         return 0
-    
+
     def memory_reserved(self, device=None):
         return 0
-    
+
     def max_memory_allocated(self, device=None):
         return 0
-    
+
     def max_memory_reserved(self, device=None):
         return 0
-    
+
     def empty_cache(self):
         pass
 
 
 class MockAttentionManager:
     """Mock for x_base.attention_manager"""
-    
+
     @staticmethod
     def attention(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, **kwargs):
         """Mock attention computation using standard scaled dot product."""
@@ -133,7 +133,7 @@ class MockAttentionManager:
 
 class MockRopeManager:
     """Mock for x_base.rope_manager"""
-    
+
     @staticmethod
     def rope(query, key, cos, sin, *args, **kwargs):
         """Apply rotary position embedding (identity for mock)."""
@@ -144,7 +144,7 @@ class MockRopeManager:
 
 class MockParallelManager:
     """Mock for x_base.ParallelManager"""
-    
+
     def __init__(self, sp_size=1, sp_group=None, enable_usp=False):
         self.sp_size = sp_size
         self.sp_group = sp_group
@@ -155,23 +155,23 @@ class MockParallelManager:
 
 class MockDistModule:
     """Mock for torch.distributed"""
-    
+
     @staticmethod
     def is_initialized():
         return False
-    
+
     @staticmethod
     def get_world_size(group=None):
         return 1
-    
+
     @staticmethod
     def get_rank(group=None):
         return 0
-    
+
     @staticmethod
     def all_reduce(tensor, op=None, group=None, async_op=False):
         return tensor
-    
+
     @staticmethod
     def all_gather(tensor_list, tensor, group=None, async_op=False):
         # 模拟分布式all_gather操作：将输入tensor添加到tensor_list中
@@ -179,13 +179,13 @@ class MockDistModule:
         if len(tensor_list) > 0:
             tensor_list[0].copy_(tensor)
         return None
-    
+
     @staticmethod
     def broadcast(tensor, src, group=None, async_op=False):
         # 模拟分布式broadcast操作：在单进程模式下，tensor保持不变
         # 因为只有一个进程，所以tensor已经是正确的值
         return tensor
-    
+
     @staticmethod
     def barrier(group=None):
         pass
@@ -288,7 +288,7 @@ def mock_torch_npu():
 def mock_torch_npu_on_tensor():
     """Fixture to mock torch.npu on tensor objects."""
     mock_npu = MockNPUModule()
-    
+
     # Create a mock that can be accessed via torch.npu
     with patch.object(torch, 'npu', mock_npu):
         yield mock_npu
@@ -400,24 +400,24 @@ def create_mock_attention_processor(heads=40, head_dim=128, sp_size=1):
     attn.heads = heads
     attn.head_dim = head_dim
     attn.parallel_manager = MockParallelManager(sp_size=sp_size) if sp_size > 1 else None
-    
+
     # Mock projections
     attn.to_q = MagicMock(return_value=torch.randn(1, 100, heads * head_dim))
     attn.to_k = MagicMock(return_value=torch.randn(1, 100, heads * head_dim))
     attn.to_v = MagicMock(return_value=torch.randn(1, 100, heads * head_dim))
-    attn.to_out = [MagicMock(return_value=torch.randn(1, 100, heads * head_dim)), 
+    attn.to_out = [MagicMock(return_value=torch.randn(1, 100, heads * head_dim)),
                    MagicMock(return_value=torch.randn(1, 100, heads * head_dim))]
-    
+
     # Mock norms
     attn.norm_q = MagicMock(side_effect=lambda x: x)
     attn.norm_k = MagicMock(side_effect=lambda x: x)
-    
+
     # Mock added projections
     attn.add_k_proj = None
     attn.add_v_proj = None
     attn.add_q_proj = None
     attn.norm_added_k = MagicMock(side_effect=lambda x: x)
-    
+
     return attn
 
 
@@ -427,12 +427,12 @@ def create_mock_transformer_block(hidden_size=5120, heads=40, head_dim=128):
     block.hidden_size = hidden_size
     block.num_heads = heads
     block.head_dim = head_dim
-    
+
     # Mock layers
     block.norm1 = MagicMock()
     block.norm2 = MagicMock()
     block.attn1 = create_mock_attention_processor(heads, head_dim)
     block.attn2 = create_mock_attention_processor(heads, head_dim)
     block.ff = MagicMock()
-    
+
     return block

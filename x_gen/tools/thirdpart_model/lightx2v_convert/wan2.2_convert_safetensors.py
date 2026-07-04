@@ -17,7 +17,7 @@ def rename_safetensors_weights(input_path, output_path, train_type):
     input_file = Path(input_path)
     if not input_file.exists() or not input_file.suffix == ".safetensors":
         raise FileNotFoundError(f"输入文件不存在或非safetensors格式：{input_path}")
-    
+
     output_file = Path(output_path).resolve()
     output_file.parent.mkdir(parents=True, exist_ok=True)
     if output_file.exists():

@@ -21,13 +21,13 @@ class TestInterpolationStateList:
         """Test initialization with frame indices."""
         frame_indices = [0, 2, 4]
         is_skip_list = True
-        
+
         # Create state list
         state_list = type('InterpolationStateList', (), {
             'frame_indices': frame_indices,
             'is_skip_list': is_skip_list
         })()
-        
+
         assert state_list.frame_indices == [0, 2, 4]
         assert state_list.is_skip_list == True
 
@@ -44,11 +44,11 @@ class TestInterpolationStateList:
     def test_is_frame_skipped(self, is_skip_list, frame_index, expected):
         """Test is_frame_skipped with parameterized skip_list mode."""
         frame_indices = [0, 2, 4]
-        
+
         def is_frame_skipped(idx):
             is_frame_in_list = idx in frame_indices
             return is_skip_list and is_frame_in_list or not is_skip_list and not is_frame_in_list
-        
+
         assert is_frame_skipped(frame_index) == expected
 
 
@@ -59,19 +59,19 @@ class TestGenericFrameLoop:
         """Test frame normalization (-1,1) to (0,1)."""
         # Use bounded values for predictable normalization range
         frames = torch.rand(5, 3, 480, 832) * 2 - 1  # Range (-1, 1)
-        
+
         # Normalize: (frames + 1) / 2 -> Range (0, 1)
         normalized = (frames + 1) / 2
-        
+
         assert normalized.min() >= 0
         assert normalized.max() <= 1
 
     def test_frame_denormalization(self):
         """Test frame denormalization (0,1) to (-1,1)."""
         frames = torch.rand(5, 3, 480, 832)
-        
+
         denormalized = frames * 2 - 1
-        
+
         assert denormalized.min() >= -1
         assert denormalized.max() <= 1
 
@@ -86,24 +86,24 @@ class TestGenericFrameLoop:
     def test_multiplier_range(self, num_input_frames, multiplier, expected_output):
         """Test multiplier determines output frame count with various input combinations."""
         actual_output = num_input_frames + (num_input_frames - 1) * (multiplier - 1)
-        
+
         assert actual_output == expected_output
 
     def test_batch_size_iteration(self):
         """Test iteration with batch_size."""
         total_frames = 10
         batch_size = 2
-        
+
         frame_indices = list(range(0, total_frames - 1, batch_size))
-        
+
         assert frame_indices == [0, 2, 4, 6, 8]
 
     def test_timestep_calculation(self):
         """Test timestep calculation for middle frames."""
         multiplier = 4
-        
+
         timesteps = [middle_i / multiplier for middle_i in range(1, multiplier)]
-        
+
         assert timesteps == [0.25, 0.5, 0.75]
 
 
@@ -113,10 +113,10 @@ class TestSkipLogic:
     def test_is_skip_odd_frames(self):
         """Test is_skip skips odd frames."""
         is_skip = True
-        
+
         for skip in range(10):
             should_process = (is_skip and skip % 2 == 0) or not is_skip
-            
+
             if skip % 2 == 0:
                 assert should_process == True
             else:
@@ -125,7 +125,7 @@ class TestSkipLogic:
     def test_is_skip_false_processes_all(self):
         """Test is_skip=False processes all frames."""
         is_skip = False
-        
+
         for skip in range(10):
             should_process = (is_skip and skip % 2 == 0) or not is_skip
             assert should_process == True
@@ -139,10 +139,10 @@ class TestFramePairing:
         frames = torch.randn(5, 3, 480, 832)
         frame_itr = 0
         batch_size = 1
-        
+
         frame0 = frames[frame_itr:frame_itr + batch_size]
         frame1 = frames[frame_itr + 1:frame_itr + 1 + batch_size]
-        
+
         assert frame0.shape == (1, 3, 480, 832)
         assert frame1.shape == (1, 3, 480, 832)
 
@@ -151,14 +151,14 @@ class TestFramePairing:
         frames = torch.randn(5, 3, 480, 832)
         frame_itr = 4  # Last pair
         batch_size = 2
-        
+
         frame0 = frames[frame_itr:frame_itr + batch_size]
         frame1 = frames[frame_itr + 1:frame_itr + 1 + batch_size]
-        
+
         # frame1 would be smaller, needs padding
         if frame0.shape[0] != frame1.shape[0]:
             frame1 = torch.cat([frame1, frames[-1:]], dim=0)
-        
+
         assert frame1.shape[0] == frame0.shape[0]
 
 
@@ -169,13 +169,13 @@ class TestNonTimestepInference:
         """Test recursive inference with n=1 returns single middle frame."""
         # When n == 1, returns [middle_frame] interpolated at t=0.5
         n = 1
-        
+
         frame0 = torch.randn(1, 3, 480, 832)
         frame1 = torch.randn(1, 3, 480, 832)
-        
+
         middle_frame = (frame0 + frame1) / 2
         result_frames = [middle_frame]
-        
+
         assert len(result_frames) == 1
         assert result_frames[0].shape == frame0.shape
 
@@ -183,14 +183,14 @@ class TestNonTimestepInference:
         """Test recursive inference with n=2 returns two middle frames."""
         # n=2 returns [first_middle at t=0.25, second_middle at t=0.75]
         n = 2
-        
+
         frame0 = torch.randn(1, 3, 480, 832)
         frame1 = torch.randn(1, 3, 480, 832)
-        
+
         first_middle = frame0 * 0.75 + frame1 * 0.25
         second_middle = frame0 * 0.25 + frame1 * 0.75
         result_frames = [first_middle, second_middle]
-        
+
         assert len(result_frames) == 2
         assert result_frames[0].shape == frame0.shape
         assert result_frames[1].shape == frame1.shape
@@ -202,25 +202,25 @@ class TestOutputFrameConstruction:
     def test_output_frame_append(self):
         """Test output frame appending."""
         output_frames = []
-        
+
         frame0 = torch.randn(1, 3, 480, 832)
         middle_frames = [torch.randn(1, 3, 480, 832) for _ in range(2)]
-        
+
         for idx in range(1):
             output_frames.append(frame0[idx:idx + 1])
             for mid_frame in middle_frames:
                 output_frames.append(mid_frame[idx:idx + 1])
-        
+
         assert len(output_frames) == 3  # 1 + 2 middle frames
 
     def test_final_frame_append(self):
         """Test final frame appending with content and shape validation."""
         frames = torch.randn(5, 3, 480, 832)
         output_frames = [torch.randn(1, 3, 480, 832) for _ in range(4)]
-        
+
         final_frame = (frames[-1:] * 2 - 1)
         output_frames.append(final_frame)
-        
+
         assert len(output_frames) == 5
         expected_final = frames[-1:] * 2 - 1
         assert torch.allclose(final_frame, expected_final)

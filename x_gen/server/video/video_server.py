@@ -47,13 +47,13 @@ logger = logging.getLogger(__name__)
 
 def decode_base64_image(image_data: str) -> str:
     """Decode base64 image data and save to temporary file.
-    
+
     Args:
         image_data: Base64 encoded image string, can be:
                    - data:image/jpeg;base64,<data>
                    - data:image/png;base64,<data>
                    - plain base64 string
-    
+
     Returns:
         Path to temporary file containing decoded image
     """
@@ -61,7 +61,7 @@ def decode_base64_image(image_data: str) -> str:
         parts = image_data.split(',', 1)
         if len(parts) != 2:
             raise ValueError("Invalid data URI format")
-        
+
         header, data = parts
         if 'image/jpeg' in header or 'image/jpg' in header:
             ext = '.jpg'
@@ -74,7 +74,7 @@ def decode_base64_image(image_data: str) -> str:
     else:
         data = image_data
         ext = '.jpg'
-    
+
     try:
         decoded = base64.b64decode(data)
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
@@ -114,16 +114,16 @@ def broadcast_dict(data: Dict, src: int = 0) -> Dict:
         length = torch.tensor([len(data_str)], dtype=torch.long, device=device)
     else:
         length = torch.tensor([0], dtype=torch.long, device=device)
-    
+
     dist.broadcast(length, src=src)
-    
+
     if rank == src:
         data_tensor = torch.tensor(list(data_str.encode('utf-8')), dtype=torch.uint8, device=device)
     else:
         data_tensor = torch.zeros(length.item(), dtype=torch.uint8, device=device)
-    
+
     dist.broadcast(data_tensor, src=src)
-    
+
     if rank != src:
         data_str = bytes(data_tensor.cpu().tolist()).decode('utf-8')
         data = json.loads(data_str)
@@ -238,12 +238,12 @@ class VideoInferenceManager:
         if self.pipe is not None:
             logger.info(f"[Rank {dist.get_rank() if dist.is_initialized() else 0}] Using cached pipe for {self.current_model}")
             return
-        
+
         model_name = args.model
         rank = dist.get_rank() if dist.is_initialized() else 0
         logger.info(f"[Rank {rank}] Loading pipe for {model_name}...")
-        
-        
+
+
         self.pipe = load_pipe(args)
         if args.lora_path_list:
             update_lora(
@@ -256,12 +256,12 @@ class VideoInferenceManager:
             )
         update_pipe(self.pipe, args)
         self.pipe = pipe_to_device(self.pipe, args)
-        
+
         logger.info(f"[Rank {rank}] Setting return_output=True for VAE")
         self.pipe.vae.return_output = True
         if hasattr(self.pipe, 'video_processor'):
             self.pipe.video_processor.return_output = True
-        
+
         if args.ten_second:
             logger.info(f"[Rank {rank}] Loading v2v_pipe for 10s video generation...")
             v2v_args = deepcopy(args)
@@ -274,12 +274,12 @@ class VideoInferenceManager:
             if dist.is_initialized():
                  dist.barrier()
                  logger.info(f"[Rank {rank}] v2v_pipe loading synchronized across all ranks")
-        
+
         if getattr(args, 'adopt_sr', False):
             logger.info(f"[Rank {rank}] Loading sr_pipe for super resolution...")
             self.sr_pipe = load_seedvr2_pipe(args)
             logger.info(f"[Rank {rank}] sr_pipe loaded successfully")
-        
+
         self.init_args = args
         self.current_model = model_name
         logger.info(f"[Rank {rank}] Pipe for {model_name} loaded and cached")
@@ -287,7 +287,7 @@ class VideoInferenceManager:
     def infer_single(self, args, task_id=None, task_manager=None) -> np.ndarray:
         rank = dist.get_rank() if dist.is_initialized() else 0
         need_super_resolution = (args.width == 1920 and args.height == 1080) or (args.width == 1080 and args.height == 1920)
-        
+
         if need_super_resolution:
             logger.info(f"[Rank {rank}] 1080P requested, will generate 720P first then super-resolve")
             original_width, original_height = args.width, args.height
@@ -295,7 +295,7 @@ class VideoInferenceManager:
                 args.width, args.height = 1280, 720
             else:
                 args.width, args.height = 720, 1280
-        
+
         infer_params = {
             "prompt": args.prompt,
             "negative_prompt": args.negative_prompt,
@@ -320,7 +320,7 @@ class VideoInferenceManager:
 
         if task_id and task_manager:
             total_steps = args.num_inference_steps
-            
+
             def progress_callback(pipeline, step: int, timestep: int, callback_kwargs: dict):
                 progress_pct = min(100.0, (step + 1) / total_steps * 100.0)
                 with task_manager.tasks_lock:
@@ -330,21 +330,21 @@ class VideoInferenceManager:
                         if task.status == "cancelled":
                             raise InterruptedError(f"Task {task_id} cancelled at step {step}")
                 return callback_kwargs
-            
+
             infer_params["callback_on_step_end"] = progress_callback
             infer_params["callback_on_step_end_tensor_inputs"] = ["latents"]
 
         output = self.pipe(**infer_params).frames[0]
-        
+
         if args.ten_second and self.v2v_pipe is not None:
             logger.info(f"[Rank {rank}] Running V2V extension for 10s video...")
-            
+
             his = 17
             cond_pos_list = [0, 1, 2, 3, 4]
             noise_mult_list = [0, 0.1, 0.3, 0.5, 0.7]
             steps_v2v = 4
             last_frames = output[-his:]
-            
+
             g_ext = torch.Generator().manual_seed(args.seed)
             ext = self.v2v_pipe(
                 conditioning_video=last_frames,
@@ -360,7 +360,7 @@ class VideoInferenceManager:
                 generator=g_ext,
                 output_type="np",
             ).frames[0]
-            
+
             output = np.concatenate([output[:-his], ext], axis=0)
             logger.info(f"[Rank {rank}] V2V extension complete, total frames: {len(output)}")
 
@@ -394,7 +394,7 @@ class VideoInferenceManager:
     def _calculate_fps_config(self, fps: int) -> Tuple[int, bool]:
         multiplier = fps // 16
         is_skip = False
-        
+
         if fps % 16 == 0:
             pass
         elif fps % 8 < 4:
@@ -402,21 +402,21 @@ class VideoInferenceManager:
             is_skip = True
         else:
             multiplier += 1
-        
+
         return multiplier, is_skip
 
     def _split_residual_frames(self, output_tensor: torch.Tensor, rank: int, world_size: int) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         num_frames = output_tensor.shape[0]
-        
+
         if num_frames % world_size != 0 and rank == 0:
             mod = num_frames % world_size
             input1 = output_tensor[:mod]
             output_tensor = output_tensor[mod:]
         else:
             input1 = None
-    
+
         return output_tensor, input1
-    
+
     def _get_input_frames(self, output_tensor: torch.Tensor, rank: int, world_size: int, step: int) -> torch.Tensor:
         if rank != (world_size - 1):
             return output_tensor[step * rank: step * (rank + 1) + 1]
@@ -425,34 +425,34 @@ class VideoInferenceManager:
 
     def _process_residual_frames(self, input1: Optional[torch.Tensor], device, multiplier: int, is_skip: bool, out: torch.Tensor) -> torch.Tensor:
         out1 = torch.zeros_like(out)[:0].to(device).contiguous()
-        
+
         if input1 is None:
             return out1
-        
+
         if input1.shape[0] >= 2:
             input1_permuted = input1.permute(0, 3, 1, 2)
             out1 = vfi(input1_permuted, device, self.interpolation_model, 1, multiplier=multiplier, is_skip=is_skip)
             out1 = out1.permute(0, 2, 3, 1).contiguous().cpu()
         else:
             out1 = input1.contiguous().cpu()
-        
+
         return out1
 
     def _gather_results(self, out: torch.Tensor, world_size: int) -> torch.Tensor:
         if world_size == 1:
             return out.cpu()
-        
+
         local_shape = torch.tensor(out.shape, device=out.device)
         all_shapes = [torch.zeros_like(local_shape) for _ in range(world_size)]
         dist.all_gather(all_shapes, local_shape)
-        
+
         max_frames = max(s[0].item() for s in all_shapes)
         padded_out = torch.zeros(max_frames, out.shape[1], out.shape[2], out.shape[3], device=out.device, dtype=out.dtype)
         padded_out[:out.shape[0]] = out
-        
+
         gathered = [torch.zeros(max_frames, out.shape[1], out.shape[2], out.shape[3], device=out.device, dtype=out.dtype) for _ in range(world_size)]
         dist.all_gather(gathered, padded_out)
-        
+
         output_result = torch.cat([g[:all_shapes[i][0].item()] for i, g in enumerate(gathered)], dim=0).cpu()
         return output_result
 
@@ -505,7 +505,7 @@ class VideoGenerationService:
 
         self.task_queue = queue.Queue(maxsize=10)
         self.result_queue = queue.Queue()
-        
+
         self.tasks: Dict[str, AsyncTask] = {}
         self.tasks_lock = threading.Lock()
 
@@ -513,7 +513,7 @@ class VideoGenerationService:
         self.task_timeout = timedelta(hours=1)
         self.keep_completed_hours = 2
         self.cleanup_interval = 300
-        
+
         self.shutdown = False
         self._setup_signal_handlers()
 
@@ -607,7 +607,7 @@ class VideoGenerationService:
     def _validate_and_convert_param(self, value, param_name, param_type, default=None, min_val=None, max_val=None):
         if value is None:
             return default, None
-        
+
         try:
             if param_type == int:
                 converted = int(value)
@@ -617,12 +617,12 @@ class VideoGenerationService:
                 converted = str(value)
             else:
                 converted = value
-            
+
             if min_val is not None and converted < min_val:
                 return default, f"{param_name} must be >= {min_val}, got {converted}"
             if max_val is not None and converted > max_val:
                 return default, f"{param_name} must be <= {max_val}, got {converted}"
-            
+
             return converted, None
         except (ValueError, TypeError):
             return default, f"{param_name} must be {param_type.__name__}, got {type(value).__name__}"
@@ -661,55 +661,55 @@ class VideoGenerationService:
         resolution = data.get('resolution')
         if resolution is None:
             return self._validate_width_height(data, errors)
-        
+
         if isinstance(resolution, str):
             resolution = resolution.lower()
             if resolution not in self.ALLOWED_RESOLUTIONS:
                 errors.append(f"resolution must be one of: {', '.join(self.ALLOWED_RESOLUTIONS.keys())}, got {resolution}")
                 return 832, 480
             return self.ALLOWED_RESOLUTIONS[resolution][0]
-        
+
         if isinstance(resolution, int):
             res_map = {480: '480p', 720: '720p', 1080: '1080p'}
             if resolution not in res_map:
                 errors.append(f"resolution must be 480, 720, or 1080, got {resolution}")
                 return 832, 480
             return self.ALLOWED_RESOLUTIONS[res_map[resolution]][0]
-        
+
         errors.append("resolution must be string (480p/720p/1080p) or int (480/720/1080)")
         return 832, 480
 
     def _validate_width_height(self, data: Dict[str, Any], errors: List[str]) -> Tuple[int, int]:
         width = data.get('width')
         height = data.get('height')
-        
+
         if width is None and height is None:
             return 832, 480
-        
+
         width, width_err = self._validate_and_convert_param(width, 'width', int, default=832, min_val=64, max_val=2048)
         if width_err:
             errors.append(width_err)
         elif width % 2 != 0:
             errors.append(f"width must be even, got {width}")
-        
+
         height, height_err = self._validate_and_convert_param(height, 'height', int, default=480, min_val=64, max_val=2048)
         if height_err:
             errors.append(height_err)
         elif height % 2 != 0:
             errors.append(f"height must be even, got {height}")
-        
+
         res_key = self._get_resolution_key(width, height)
         if res_key is None:
             allowed = [f"{w}x{h} ({k})" for k, sizes in self.ALLOWED_RESOLUTIONS.items() for w, h in sizes]
             errors.append(f"Invalid resolution {width}x{height}. Allowed: {', '.join(allowed)}")
-        
+
         return width, height
 
     def _validate_duration(self, data: Dict[str, Any], errors: List[str]) -> int:
         duration = data.get('duration', 5)
         if duration is None:
             return 5
-        
+
         duration = self._convert_to_int(duration, errors, "duration")
         if duration not in (5, 10):
             errors.append(f"duration must be 5 or 10, got {duration}")
@@ -797,9 +797,9 @@ class VideoGenerationService:
             warnings.append("i2v_image_path is ignored for T2V model")
         return i2v_image_path
 
-    def _generate_param_warnings(self, frames: int, unknown_params: set, ten_second: bool, 
-                                  adopt_sr: bool, resolution: int, save_fps: int, 
-                                  frame_interpolation: bool, duration: int, data: Dict, 
+    def _generate_param_warnings(self, frames: int, unknown_params: set, ten_second: bool,
+                                  adopt_sr: bool, resolution: int, save_fps: int,
+                                  frame_interpolation: bool, duration: int, data: Dict,
                                   warnings: List[str]) -> bool:
         if frames and frames > 81:
             warnings.append(f"Large frame count ({frames}) will significantly increase generation time")
@@ -840,9 +840,9 @@ class VideoGenerationService:
             warnings.append("i2v_image_path is ignored for T2V model")
         return i2v_image_path
 
-    def _generate_param_warnings(self, frames: int, unknown_params: set, ten_second: bool, 
-                                  adopt_sr: bool, resolution: int, save_fps: int, 
-                                  frame_interpolation: bool, duration: int, data: Dict, 
+    def _generate_param_warnings(self, frames: int, unknown_params: set, ten_second: bool,
+                                  adopt_sr: bool, resolution: int, save_fps: int,
+                                  frame_interpolation: bool, duration: int, data: Dict,
                                   warnings: List[str]) -> bool:
         if frames and frames > 81:
             warnings.append(f"Large frame count ({frames}) will significantly increase generation time")
@@ -868,12 +868,12 @@ class VideoGenerationService:
         numeric_params = self._validate_numeric_params(data, errors)
         negative_prompt = self._validate_negative_prompt(data, errors)
         i2v_image_path = self._validate_i2v_params(data, errors, warnings)
-        
+
         unknown_params = set(data.keys()) - self.KNOWN_PARAMS
         duration = self._validate_duration(data, errors)
         ten_second = (duration == 10)
         adopt_sr = self._validate_boolean_param(data.get('adopt_sr'), errors, 'adopt_sr')
-        
+
         resolution = 480
         if width == 1280 and height == 720:
             resolution = 720
@@ -882,15 +882,15 @@ class VideoGenerationService:
 
         frame_interpolation = self._validate_boolean_param(data.get('frame_interpolation'), errors, 'frame_interpolation')
         save_fps = self._validate_save_fps(data, errors)
-        
+
         frame_interpolation = self._generate_param_warnings(
-            numeric_params['frames'], unknown_params, ten_second, adopt_sr, 
+            numeric_params['frames'], unknown_params, ten_second, adopt_sr,
             resolution, save_fps, frame_interpolation, duration, data, warnings
         )
 
         if errors:
             return False, {"errors": errors, "warnings": warnings}
-        
+
         validated_data = {
             'prompt': prompt,
             'negative_prompt': negative_prompt,
@@ -966,12 +966,12 @@ class VideoGenerationService:
             try:
                 if not self.is_initialized:
                     return jsonify({"status": "error", "message": "Service not initialized. Call /init first"}), 400
-                
+
                 if self.shutdown:
                     return jsonify({"status": "error", "message": "Service is shutting down"}), 503
 
                 self._cleanup_completed_tasks()
-                
+
                 with self.tasks_lock:
                     if len(self.tasks) >= self.max_tasks:
                         return jsonify({
@@ -1291,7 +1291,7 @@ class VideoGenerationService:
         external_input = external_input.strip()
         if not external_input:
             raise ValueError("input string cannot be empty")
-        
+
         if external_input.startswith('{') or external_input.startswith('['):
             try:
                 return False
@@ -1312,10 +1312,10 @@ class VideoGenerationService:
         for key in ['prompt', 'negative_prompt']:
             if key in input_dict:
                 parsed[key] = input_dict[key]
-        
+
         if 'image' in input_dict:
             self._parse_image_data(input_dict['image'], parsed)
-        
+
         for key in ['width', 'height', 'frames', 'seed', 'num_inference_steps', 'i2v_image_path', 'save_fps']:
             if key in input_dict:
                 parsed[key] = input_dict[key]
@@ -1339,11 +1339,11 @@ class VideoGenerationService:
     def _parse_parameters(self, params: Dict[str, Any], parsed: Dict[str, Any]) -> None:
         if 'size' in params:
             self._parse_size_param(params['size'], parsed)
-        
+
         for key in ['duration', 'seed', 'num_inference_steps']:
             if key in params:
                 parsed[key] = params[key]
-        
+
         if 'fps' in params:
             parsed['save_fps'] = params['fps']
 
@@ -1362,18 +1362,18 @@ class VideoGenerationService:
             self._extract_basic_params(inner_input, parsed)
         else:
             self._extract_basic_params(external_input, parsed)
-        
+
         if 'parameters' in external_input and isinstance(external_input['parameters'], dict):
             self._parse_parameters(external_input['parameters'], parsed)
-        
+
         self._detect_task_type(external_input, parsed)
 
     def _parse_external_input(self, external_input: Any) -> Dict[str, Any]:
         parsed = {}
-        
+
         if external_input is None:
             raise ValueError("input cannot be None")
-        
+
         if isinstance(external_input, str):
             if self._parse_string_input(external_input, parsed):
                 return parsed
@@ -1381,13 +1381,13 @@ class VideoGenerationService:
                 external_input = json.loads(external_input)
             except json.JSONDecodeError:
                 return parsed
-        
+
         if isinstance(external_input, dict):
             self._parse_dict_input(external_input, parsed)
-        
+
         if 'prompt' not in parsed:
             raise ValueError("Could not extract prompt from input")
-        
+
         return parsed
 
     def _setup_internal_task_routes(self):
@@ -1396,10 +1396,10 @@ class VideoGenerationService:
             try:
                 if not self.is_initialized:
                     return jsonify({"error": "Service not initialized"}), 503
-                
+
                 if self.shutdown:
                     return jsonify({"error": "Service is shutting down"}), 503
-                
+
                 data = request.get_data()
                 if not data:
                     return jsonify({"error": "No JSON data provided"}), 400
@@ -1407,10 +1407,10 @@ class VideoGenerationService:
                 task_id = data.get('id')
                 if not task_id:
                     return jsonify({"error": "Missing required field: id"}), 400
-                
+
                 external_input = data.get('input')
                 created_at_ms = data.get('created_at')
-                
+
                 try:
                     parsed_params = self._parse_external_input(external_input)
                 except ValueError as e:
@@ -1421,12 +1421,12 @@ class VideoGenerationService:
                         "output": "",
                         "error": str(e)
                     }), 400
-                
+
                 with self.tasks_lock:
                     if task_id in self.tasks:
                         existing = self.tasks[task_id]
                         return jsonify(existing.to_platform_dict()), 200
-                
+
                 is_valid, result = self._validate_generate_params(parsed_params)
                 if not is_valid:
                     error_msg = "; ".join(result.get("errors", []))
@@ -1447,24 +1447,24 @@ class VideoGenerationService:
                         "output": "",
                         "error": error_msg
                     }), 400
-                
+
                 validated_data = result["data"]
-                
+
                 task = AsyncTask(
                     task_id=task_id,
                     task_type="video_generation",
                     params=validated_data,
                     created_at_ms=created_at_ms
                 )
-                
+
                 with self.tasks_lock:
                     self.tasks[task_id] = task
-                
+
                 save_path = validated_data.get('save_path')
                 if not save_path:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     save_path = f"/tmp/generated_videos/video_{task_id[:8]}_{timestamp}.mp4"
-                
+
                 try:
                     self.task_queue.put({
                         'task_id': task_id,
@@ -1480,10 +1480,10 @@ class VideoGenerationService:
                         "output": "",
                         "error": "Task queue is full"
                     }), 503
-                
+
                 logger.info(f"[Rank 0] Internal task {task_id} created and queued")
                 return jsonify(task.to_platform_dict()), 200
-                
+
             except Exception as e:
                 logger.error(f"[Rank 0] Failed to create internal task: {str(e)}", exc_info=True)
                 return jsonify({"error": str(e)}), 500
@@ -1504,10 +1504,10 @@ class VideoGenerationService:
             try:
                 with self.tasks_lock:
                     task = self.tasks.get(task_id)
-                
+
                 if not task:
                     return jsonify({"error": f"Task {task_id} not found"}), 404
-                
+
                 return jsonify(task.to_platform_dict()), 200
             except Exception as e:
                 logger.error(f"[Rank 0] Failed to get task: {str(e)}", exc_info=True)
@@ -1518,10 +1518,10 @@ class VideoGenerationService:
             try:
                 with self.tasks_lock:
                     task = self.tasks.get(task_id)
-                    
+
                     if not task:
                         return jsonify({"error": f"Task {task_id} not found"}), 404
-                    
+
                     if task.status in ["running"]:
                         task.status = "cancelled"
                         task.completed_at = datetime.now()
@@ -1534,10 +1534,10 @@ class VideoGenerationService:
                         del self.tasks[task_id]
                         logger.info(f"[Rank 0] Task {task_id} deleted")
                         return jsonify({"id": task_id}), 200
-                
+
                 logger.info(f"[Rank 0] Task {task_id} cancelled")
                 return jsonify({"id": task_id}), 200
-                
+
             except Exception as e:
                 logger.error(f"[Rank 0] Failed to delete task: {str(e)}", exc_info=True)
                 return jsonify({"error": str(e)}), 500
@@ -1644,17 +1644,17 @@ class VideoGenerationService:
         prompt = data.get('prompt')
         if require_prompt and not prompt:
             raise ValueError("prompt is required in request")
-        
+
         self._update_basic_config(config, data, prompt)
         self._update_guidance_config(config, data)
         self._update_path_config(config, data, save_path)
         data = self._update_ten_second_config(config, data)
         data = self._update_resolution_config(config, data)
         self._update_fps_config(config, data)
-        
+
         if not config.get('adopt_sr', False):
             config.pop('resolution', None)
-        
+
         arg_list = self._config_to_arg_list(config)
         old_argv = sys.argv
         sys.argv = ['video_server.py'] + arg_list
@@ -1686,7 +1686,7 @@ class VideoGenerationService:
         if w == 0 or h == 0:
             logger.error(f"Cannot get video resolution for {video_path}")
             return False
-        
+
         temp_path = video_path + '.temp.mp4'
         cmd = [
             'ffmpeg', '-y', '-i', video_path,
@@ -1738,14 +1738,14 @@ class VideoGenerationService:
             task = self.tasks.get(task_id)
             if not task or task.status != "running":
                 return
-            
+
             task.status = "completed"
             task.progress = 100.0
             result_data = {
                 "video_path": save_path,
                 "infer_time": round(infer_time, 2)
             }
-            
+
             external_base_url = self.default_config.get("external_base_url")
             if external_base_url:
                 download_url = f"{external_base_url.rstrip('/')}/download/{task_id}"
@@ -1759,7 +1759,7 @@ class VideoGenerationService:
                 download_url = obs_client.generate_url(filename)
                 obs_client.close()
                 result_data["download_url"] = download_url
-                
+
             task.result = result_data
             task.output = json.dumps(result_data)
             task.completed_at = datetime.now()
@@ -1773,7 +1773,7 @@ class VideoGenerationService:
                 task.status = "cancelled"
                 task.error = error
                 task.completed_at = datetime.now()
-        
+
         self._clear_cache()
         logger.info(f"[Rank 0] NPU resources released for cancelled task {task_id}")
 
@@ -1802,10 +1802,10 @@ class VideoGenerationService:
             self._set_guidance_scale(args)
 
             self.inference_manager.initialize_pipe(args)
-            
+
             infer_info.update_info(args)
             infer_info.save_path = save_path
-            
+
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
             torch.cuda.synchronize()
@@ -1844,7 +1844,7 @@ class VideoGenerationService:
                     broadcast_data = broadcast_dict({}, src=0)
                     data = broadcast_data['data']
                     save_path = broadcast_data['save_path']
-                    
+
                     dist.barrier()
                     logger.info(f"[Rank {self.rank}] All ranks ready, starting inference")
 
@@ -1865,7 +1865,7 @@ class VideoGenerationService:
     def _task_processor_thread(self):
         heartbeat_interval = 30
         last_heartbeat_time = time.time()
-        
+
         while not self.shutdown:
             try:
                 try:
@@ -1930,16 +1930,16 @@ class VideoGenerationService:
         if not self.is_initialized or self.inference_manager is None:
             logger.warning(f"[Rank {self.rank}] Service not initialized, skip model loading")
             return
-        
+
         if self.inference_manager.pipe is not None:
             logger.info(f"[Rank {self.rank}] Model already loaded")
             return
-        
+
         init_args = self._build_args({}, require_prompt=False)
-        
+
         if init_args.guidance_scale is None or init_args.guidance_scale_2 is None:
             init_args.guidance_scale, init_args.guidance_scale_2 = GUIDANCE_SCALE_MAP[init_args.model]
-        
+
         logger.info(f"[Rank {self.rank}] Loading model...")
         self.inference_manager.initialize_pipe(init_args)
         logger.info(f"[Rank {self.rank}] Model loaded successfully")
@@ -1948,16 +1948,16 @@ class VideoGenerationService:
         if not self.is_initialized or self.inference_manager is None:
             logger.warning("[Rank 0] Service not initialized, skip warmup")
             return
-        
+
         if self.rank != 0:
             return
-        
+
         task_type = self.default_config.get('task_type', 't2v')
         ten_second = self.default_config.get('ten_second', False)
         duration = 10 if ten_second else 5
-        
+
         logger.info(f"[Rank 0] Submitting warmup task (duration={duration}s, resolution=1080P, task_type={task_type})...")
-        
+
         warmup_params = {
             "prompt": "warmup test",
             "width": 1920,
@@ -1969,14 +1969,14 @@ class VideoGenerationService:
             "guidance_scale": 3.5,
             "guidance_scale_2": 3.5
         }
-        
+
         if task_type == 'i2v':
             warmup_image_path = "/tmp/warmup_input.png"
             warmup_image = Image.new('RGB', (1920, 1080), color=(128, 128, 128))
             warmup_image.save(warmup_image_path)
             warmup_params['i2v_image_path'] = warmup_image_path
             logger.info(f"[Rank 0] Created warmup image: {warmup_image_path}")
-        
+
         task_id = str(uuid.uuid4())
         save_path = "/tmp/warmup_video.mp4"
         task = AsyncTask(
@@ -1984,10 +1984,10 @@ class VideoGenerationService:
             task_type="warmup",
             params=warmup_params
         )
-        
+
         with self.tasks_lock:
             self.tasks[task_id] = task
-        
+
         try:
             self.task_queue.put({
                 'task_id': task_id,
@@ -2004,7 +2004,7 @@ class VideoGenerationService:
 def _apply_ten_second_config_args(args) -> None:
     """Apply command line arguments to TEN_SECOND_CONFIG."""
 
-    arg_to_config = ['ten_second_model_id_t2v', 'ten_second_model_path', 'ten_second_model_path_2', 'pusa_lora', 'pusa_lora2', 'joint_model_path', 
+    arg_to_config = ['ten_second_model_id_t2v', 'ten_second_model_path', 'ten_second_model_path_2', 'pusa_lora', 'pusa_lora2', 'joint_model_path',
     'seedvr2_model_dir', 'seedvr2_model_name', 'x_model_path', 'x_model_path_2', 'frame_model_path']
 
     for arg_name in arg_to_config:
@@ -2124,17 +2124,17 @@ def main():
                        help="Use different turbo mode inference.")
 
     args = parser.parse_args()
-    
+
     _apply_ten_second_config_args(args)
 
     if args.init:
         init_env()
-    
+
     rank = dist.get_rank() if dist.is_initialized() else 0
     world_size = dist.get_world_size() if dist.is_initialized() else 1
 
     service = VideoGenerationService(config_path=args.config)
-    
+
     _apply_service_config(service, args, rank)
 
     if args.init:

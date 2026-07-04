@@ -30,7 +30,7 @@ class TestAscendWanVACETransformerBlock:
         """Test initialization with input projection."""
         apply_input_projection = True
         dim = 1024
-        
+
         if apply_input_projection:
             proj_in = nn.Linear(dim, dim)
             assert proj_in is not None
@@ -41,7 +41,7 @@ class TestAscendWanVACETransformerBlock:
         """Test initialization with output projection."""
         apply_output_projection = True
         dim = 1024
-        
+
         if apply_output_projection:
             proj_out = nn.Linear(dim, dim)
             assert proj_out is not None
@@ -58,10 +58,10 @@ class TestAscendWanVACETransformerBlock:
         """Test scale_shift_table chunking."""
         dim = 64
         temb = torch.randn(1, 6, dim)
-        
+
         chunks = temb.chunk(6, dim=1)
         shift_msa, scale_msa, gate_msa, c_shift_msa, c_scale_msa, c_gate_msa = chunks
-        
+
         assert shift_msa.shape == (1, 1, dim)
         assert scale_msa.shape == (1, 1, dim)
         assert gate_msa.shape == (1, 1, dim)
@@ -74,7 +74,7 @@ class TestForwardPass:
         """Test forward method with input projection."""
         try:
             from x_diffusers.framework.transformer.wan_vace import AscendWanVACETransformerBlock
-            
+
             dim = 1024
             block = AscendWanVACETransformerBlock(dim, ffn_dim=4096, num_heads=16)
             assert block is not None
@@ -84,38 +84,38 @@ class TestForwardPass:
     def test_forward_self_attention(self):
         """Test self-attention in forward."""
         hidden_states = torch.randn(1, 100, 1024)
-        
+
         # Self-attention would be applied
         # Just check shape preservation
         attn_output = torch.randn_like(hidden_states)
-        
+
         assert attn_output.shape == hidden_states.shape
 
     def test_forward_cross_attention(self):
         """Test cross-attention in forward."""
         hidden_states = torch.randn(1, 100, 1024)
         encoder_hidden_states = torch.randn(1, 256, 1024)
-        
+
         # Cross-attention with encoder hidden states
         # Shape preservation check
         attn_output = torch.randn_like(hidden_states)
-        
+
         assert attn_output.shape == hidden_states.shape
 
     def test_forward_ffn(self):
         """Test feed-forward in forward."""
         hidden_states = torch.randn(1, 100, 1024)
-        
+
         # FFN
         ffn_output = torch.randn_like(hidden_states)
-        
+
         assert ffn_output.shape == hidden_states.shape
 
     def test_forward_output_projection(self):
         """Test output projection in forward."""
         control_hidden_states = torch.randn(1, 100, 1024)
         apply_output_projection = True
-        
+
         if apply_output_projection:
             proj_out = nn.Linear(1024, 1024)
             conditioning_states = proj_out(control_hidden_states)
@@ -136,7 +136,7 @@ class TestAscendWanVACETransformer3DModel:
         freq_dim = 256
         ffn_dim = 13824
         num_layers = 40
-        
+
         assert patch_size == (1, 2, 2)
         assert num_attention_heads == 40
         assert attention_head_dim == 128
@@ -149,7 +149,7 @@ class TestAscendWanVACETransformer3DModel:
         """Test VACE-specific configuration."""
         vace_in_channels = 96
         vace_layers = [0, 1, 2, 3, 4]  # Example
-        
+
         assert vace_in_channels == 96
         assert isinstance(vace_layers, list)
 
@@ -157,14 +157,14 @@ class TestAscendWanVACETransformer3DModel:
         """Test RoPE configuration."""
         rope_max_seq_len = 1024
         pos_embed_seq_len = None  # Optional
-        
+
         assert rope_max_seq_len == 1024
         assert pos_embed_seq_len is None
 
     def test_added_kv_proj_dim(self):
         """Test added KV projection dimension."""
         added_kv_proj_dim = None  # Optional
-        
+
         assert added_kv_proj_dim is None
 
     def test_class_attributes(self):
@@ -174,7 +174,7 @@ class TestAscendWanVACETransformer3DModel:
         _no_split_modules = ["WanTransformerBlock", "WanVACETransformerBlock"]
         _keep_in_fp32_modules = ["time_embedder", "scale_shift_table", "norm1", "norm2", "norm3"]
         _keys_to_ignore_on_load_unexpected = ["norm_added_q"]
-        
+
         assert _supports_gradient_checkpointing == True
         assert len(_skip_layerwise_casting_patterns) == 4
         assert len(_no_split_modules) == 2
@@ -190,9 +190,9 @@ class TestVACEPatchEmbedding:
         frames = 21
         height = 60
         width = 104
-        
+
         vace_input = torch.randn(batch_size, channels, frames, height, width)
-        
+
         # Patch embedding would process this
         # Check input shape
         assert vace_input.shape == (batch_size, channels, frames, height, width)
@@ -205,7 +205,7 @@ class TestConditioningStates:
         """Test conditioning states behavior with output projection disabled."""
         try:
             from x_diffusers.framework.transformer.wan_vace import AscendWanVACETransformerBlock
-            
+
             dim = 1024
             block = AscendWanVACETransformerBlock(
                 dim, ffn_dim=4096, num_heads=16,
@@ -219,12 +219,12 @@ class TestConditioningStates:
         """Test conditioning states with output projection."""
         apply_output_projection = True
         control_hidden_states = torch.randn(1, 100, 1024)
-        
+
         if apply_output_projection:
             conditioning_states = torch.randn_like(control_hidden_states)
         else:
             conditioning_states = None
-        
+
         assert conditioning_states is not None
 
 
@@ -234,12 +234,12 @@ class TestLayerNorm:
     def test_fp32_layer_norm(self):
         """Test FP32 layer norm computation."""
         hidden_states = torch.randn(1, 100, 1024)
-        
+
         # FP32LayerNorm computes in float32
         normalized = torch.nn.functional.layer_norm(
             hidden_states.float(), [1024]
         )
-        
+
         assert normalized.dtype == torch.float32
         assert normalized.shape == hidden_states.shape
 

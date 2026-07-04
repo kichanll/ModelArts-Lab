@@ -31,47 +31,47 @@ def mock_pipeline_objects():
     mock_diffusers.CogVideoXPipeline = MagicMock(name="CogVideoXPipeline")
     mock_diffusers.HunyuanVideoPipeline = MagicMock(name="HunyuanVideoPipeline")
     mock_diffusers.HunyuanVideoImageToVideoPipeline = MagicMock(name="HunyuanVideoImageToVideoPipeline")
-    
+
     # === x_base mock ===
     mock_x_base = MagicMock()
     mock_x_base.enable_sp = MagicMock(name="enable_sp")
     mock_x_base.enable_vae_lightning = MagicMock(name="enable_vae_lightning")
-    
+
     # === ten_second mock ===
     mock_ten_second = MagicMock()
     mock_ten_second.WanVideoToVideoPipeline = MagicMock(name="WanVideoToVideoPipeline")
-    
+
     # === Simulate pipeline.py behavior ===
     # The pipeline.py does the following method injections:
-    
+
     # WanPipeline
     mock_diffusers.WanPipeline.enable_sp = mock_x_base.enable_sp
     mock_diffusers.WanPipeline.enable_vae_lightning = mock_x_base.enable_vae_lightning
-    
+
     # WanImageToVideoPipeline
     mock_diffusers.WanImageToVideoPipeline.enable_sp = mock_x_base.enable_sp
     mock_diffusers.WanImageToVideoPipeline.enable_vae_lightning = mock_x_base.enable_vae_lightning
-    
+
     # WanVideoToVideoPipeline (from ten_second)
     mock_ten_second.WanVideoToVideoPipeline.enable_sp = mock_x_base.enable_sp
     mock_ten_second.WanVideoToVideoPipeline.enable_vae_lightning = mock_x_base.enable_vae_lightning
-    
+
     # WanVACEPipeline
     mock_diffusers.WanVACEPipeline.enable_sp = mock_x_base.enable_sp
     mock_diffusers.WanVACEPipeline.enable_vae_lightning = mock_x_base.enable_vae_lightning
-    
+
     # CogVideoXPipeline
     mock_diffusers.CogVideoXPipeline.enable_sp = mock_x_base.enable_sp
     mock_diffusers.CogVideoXPipeline.enable_vae_lightning = mock_x_base.enable_vae_lightning
-    
+
     # HunyuanVideoPipeline
     mock_diffusers.HunyuanVideoPipeline.enable_sp = mock_x_base.enable_sp
     mock_diffusers.HunyuanVideoPipeline.enable_vae_lightning = mock_x_base.enable_vae_lightning
-    
+
     # HunyuanVideoImageToVideoPipeline
     mock_diffusers.HunyuanVideoImageToVideoPipeline.enable_sp = mock_x_base.enable_sp
     mock_diffusers.HunyuanVideoImageToVideoPipeline.enable_vae_lightning = mock_x_base.enable_vae_lightning
-    
+
     return mock_diffusers, mock_x_base, mock_ten_second
 
 
@@ -93,14 +93,14 @@ class TestPipelineMethodInjection:
     def test_method_injection(self, mock_pipeline_objects, pipeline_name, module, pipeline_attr, method_name):
         """Test method injection for all pipeline classes."""
         mock_diffusers, mock_x_base, mock_ten_second = mock_pipeline_objects
-        
+
         if module == "diffusers":
             pipeline = getattr(mock_diffusers, pipeline_attr)
         else:
             pipeline = getattr(mock_ten_second, pipeline_attr)
-        
+
         expected_method = getattr(mock_x_base, method_name)
-        
+
         assert hasattr(pipeline, method_name)
         assert getattr(pipeline, method_name) == expected_method
 

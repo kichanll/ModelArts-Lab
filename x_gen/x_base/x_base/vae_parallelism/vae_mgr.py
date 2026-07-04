@@ -48,22 +48,22 @@ class VAEManager:
         batch, channels, frames, total_in_h, total_in_w = input_shape
         self.total_in_h = total_in_h
         self.total_in_w = total_in_w
-        
+
         self.factor = factor
         self.is_encode = is_encode
         self.pad_mode = pad_mode
         self.pad_content = pad_content
         self.use_blend = use_blend
-        
+
         # 1. 计算分块数量 (Tile Grid)
         self.rank = dist.get_rank() if dist.is_initialized() else 0
         self.world_size = dist.get_world_size() if dist.is_initialized() else 1
-        
+
         # 逻辑分块所用的"有效 world_size"，16卡时退化为8卡的切分规格
         self.tile_world_size = infer_info.get_tile_world_size(self.world_size)
         # 当前 Rank 在逻辑分块中的身份（16卡时 rank 8 与 rank 0 处理同一块）
         self.tile_rank = self.rank % self.tile_world_size
-        
+
         self.num_h_tiles, self.num_w_tiles = split_rectangle(total_in_h, total_in_w, self.tile_world_size)
 
         # 2. 定义 Padding 大小 (Input Padding)，决定了 Tile 为了消除边界效应需要多读多少像素
@@ -91,11 +91,11 @@ class VAEManager:
             # 窗口长度 = 步长 + 双倍Padding
             self.in_window_h = self.in_stride_h + 2 * self.in_pad_size
             self.in_window_w = self.in_stride_w + 2 * self.in_pad_size
-            
+
         # 4. 计算输出侧尺寸
         if is_encode:
             # Downsampling (Image -> Latent)
-            self.out_stride_h = int(self.in_stride_h / factor)  
+            self.out_stride_h = int(self.in_stride_h / factor)
             self.out_stride_w = int(self.in_stride_w / factor)
             self.out_window_h = int(self.in_window_h / factor)
             self.out_window_w = int(self.in_window_w / factor)
@@ -109,18 +109,18 @@ class VAEManager:
         # Blend Size: 输出时用于混合的重叠区域大小。
         self.blend_h = self.out_window_h - self.out_stride_h
         self.blend_w = self.out_window_w - self.out_stride_w
-        
+
         self.save_video_stream = None
 
         # [新增] 用于存储 all_sides_valid 模式下的补全信息
         # 格式: (pad_left, pad_right, pad_top, pad_bottom)
-        self._curr_pad_info = (0, 0, 0, 0) 
+        self._curr_pad_info = (0, 0, 0, 0)
 
 
     def get_tile_from_x(self, x: torch.Tensor) -> torch.Tensor:
         if self.pad_mode == "all_sides_valid":
             return self._get_tile_valid_mode(x)
-        
+
         # 1. 预处理
         B, C, T, H, W = x.shape
         x = x.view(-1, T, H, W)
@@ -162,7 +162,7 @@ class VAEManager:
         # H, W 已经变了，需要获取新的尺寸
         H_padded, W_padded = x.shape[2], x.shape[3]
         x = x.view(B, C, T, H_padded, W_padded)
-        
+
         # 6. 获得具体切片，根据当前 Rank 从完整输入 x 中切分出对应的 Tile
         h_idx = self.tile_rank  // self.num_w_tiles
         w_idx = self.tile_rank  % self.num_w_tiles
@@ -183,43 +183,43 @@ class VAEManager:
         并记录因为超出边界而少读了多少 Padding，以便在 align_out 时补回。
         """
         B, C, T, H, W = x.shape
-        
+
         h_idx = self.tile_rank // self.num_w_tiles
         w_idx = self.tile_rank % self.num_w_tiles
-        
+
         # 1. 理论上的 Window 范围 (包含 Padding 的理想范围)
         # 中心对齐逻辑：Start = Index * Stride - Pad
         h_start_theory = h_idx * self.in_stride_h - self.in_pad_size
         w_start_theory = w_idx * self.in_stride_w - self.in_pad_size
-        
+
         h_end_theory = h_start_theory + self.in_window_h
         w_end_theory = w_start_theory + self.in_window_w
-        
+
         # 2. 实际有效的图片范围 (Clamp 到 [0, Total])
         h_start_valid = max(0, h_start_theory)
         w_start_valid = max(0, w_start_theory)
         h_end_valid = min(self.total_in_h, h_end_theory)
         w_end_valid = min(self.total_in_w, w_end_theory)
-        
+
         # 3. 计算“缺失”的像素量 (Offset)
         # 如果理论起点是 -32，实际起点是 0，说明左边/上边少了 32 个像素 -> pad_top/left = 32
         pad_top = h_start_valid - h_start_theory
         pad_left = w_start_valid - w_start_theory
-        
+
         # 如果理论终点是 Total+32，实际终点是 Total，说明右边/下边少了 32 个像素 -> pad_bottom/right = 32
         pad_bottom = h_end_theory - h_end_valid
         pad_right = w_end_theory - w_end_valid
-        
+
         # [关键] 存下来给 align_out 用
         self._curr_pad_info = (pad_left, pad_right, pad_top, pad_bottom)
-        
+
         # 4. 执行切片 (只切有效区域)
         # x shape: [B, C, T, H, W]
         # 注意：这里的 tile 尺寸可能小于 self.in_window_h/w
         tile = x[:, :, :, h_start_valid:h_end_valid, w_start_valid:w_end_valid]
         return tile
-    
-    
+
+
     def align_out(self, out: torch.Tensor) -> torch.Tensor:
         """
         根据输入时缺失的像素，对输出 Tensor 进行补全，使其恢复到 out_window 的大小。
@@ -228,7 +228,7 @@ class VAEManager:
         if self.pad_mode == "all_sides_valid":
             # 1. 取出输入时的缺失量
             pl, pr, pt, pb = self._curr_pad_info
-            
+
             # 2. 根据下采样/上采样 缩放 Padding 量
             if self.is_encode:
                 # Downsampling (Image -> Latent)
@@ -243,14 +243,14 @@ class VAEManager:
                 pr = pr * self.factor
                 pt = pt * self.factor
                 pb = pb * self.factor
-            
+
             # 3. 定向 Padding
             # F.pad 顺序: (Left, Right, Top, Bottom)
             # 补的值通常是 0 (constant)，因为这些区域在 merge 时会被切掉 (overlap)
             if pl > 0 or pr > 0 or pt > 0 or pb > 0:
                 out = F.pad(out, (pl, pr, pt, pb), mode='constant', value=0)
             return out
-            
+
         else:
             # 原有的 tail_only 逻辑 (只补右下)
             if out.shape[-2] < self.out_window_h:
@@ -272,7 +272,7 @@ class VAEManager:
 
         # 16卡时 gathered_out[0..7] 与 [8..15] 内容相同，只取前 tile_world_size 份
         gathered_out = gathered_out[: self.tile_world_size]
-        
+
         # 2. Organize linear gathered chunks into a 2D Grid
         # -----------------------------------------------------------
         # spatial_grid[row][col] -> Tensor
@@ -289,16 +289,16 @@ class VAEManager:
         # 4. Crop
         final_h = int(self.total_in_h / self.factor) if self.is_encode else int(self.total_in_h * self.factor)
         final_w = int(self.total_in_w / self.factor) if self.is_encode else int(self.total_in_w * self.factor)
-        
+
         out = out[:, :, :, :final_h, :final_w]
         return out
-    
+
 
     def _blend_tile(self, i: int, j: int, spatial_grid: list, tile: torch.Tensor) -> torch.Tensor:
         """抽离：处理 tile 的混合（Blend）逻辑"""
         if not self.use_blend:
             return tile
-            
+
         if i > 0:
             tile = blend_v(spatial_grid[i - 1][j], tile, self.blend_h)
         if j > 0:
@@ -324,7 +324,7 @@ class VAEManager:
             bottom_crop = self.blend_h // 2 if i == n_rows - 1 else self.blend_h
             left_crop = self.blend_w // 2 if j == 0 else 0
             right_crop = self.blend_w // 2 if j == n_cols - 1 else self.blend_w
-            
+
             return tile[..., top_crop: -bottom_crop, left_crop: -right_crop]
 
         return tile
@@ -337,7 +337,7 @@ class VAEManager:
         result_rows = []
         n_rows = len(spatial_grid)
         n_cols = len(spatial_grid[0])
-        
+
         for i, row in enumerate(spatial_grid):
             result_row = []
             for j, tile in enumerate(row):
@@ -346,15 +346,15 @@ class VAEManager:
                     tile = self._blend_tile(i, j, spatial_grid, tile)
                     # 2. 裁剪
                     tile = self._crop_tile(i, j, n_rows, n_cols, tile)
-                    
+
                 result_row.append(tile)
             # 按宽度拼接当前行
-            result_rows.append(torch.cat(result_row, dim=-1)) 
-            
+            result_rows.append(torch.cat(result_row, dim=-1))
+
         # 按高度拼接所有行
         return torch.cat(result_rows, dim=-2)
-    
-    
+
+
     def create_video_stream(self):
         if infer_info.task_type != "t2i" and self.rank == 0:
             self.save_video_stream = SaveVideoStream()
@@ -377,26 +377,26 @@ class VAEManager:
 
     def close_video_stream(self):
         if infer_info.task_type != "t2i" and self.rank == 0:
-            self.save_video_stream.close()    
-         
+            self.save_video_stream.close()
+
 
 def split_rectangle(total_height: int, total_width: int, world_size: int):
     """
     计算最佳的切分网格 (Rows, Cols)，使得每个 Tile 的形状尽可能接近正方形。
-    
+
     原理:
         我们需要将图像切分为 world_size 个块。
         假设切分为 num_rows x num_cols 的网格 (其中 num_rows * num_cols = world_size)。
         每个 Tile 的尺寸为: (total_height / num_rows) x (total_width / num_cols)。
         为了处理效率和感受野的均匀性，我们希望 Tile 的长宽比接近 1:1。
-    
+
     Args:
         total_height: 输入图像的总高度。
         total_width: 输入图像的总宽度。
         world_size: 并行计算的总数 (即需要切分的块数)。
-        
+
     Returns:
-        (num_rows, num_cols): 
+        (num_rows, num_cols):
             - num_rows: 高度方向切几刀 (对应 H 维度)。
             - num_cols: 宽度方向切几刀 (对应 W 维度)。
     """
@@ -416,7 +416,7 @@ def split_rectangle(total_height: int, total_width: int, world_size: int):
         # 计算当前切分下，单个 Tile 的高度和宽度
         tile_h = total_height / num_rows
         tile_w = total_width / num_cols
-        
+
         # 计算宽高比 (Aspect Ratio)
         # tile_h / tile_w 越接近 1 越好
         ratio = tile_h / tile_w

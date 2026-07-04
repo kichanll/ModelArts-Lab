@@ -241,12 +241,12 @@ class TestLoadLora:
 
         # Verify call count
         assert mock_pipe.load_lora_weights.call_count == 2
-        
+
         # Verify each path was passed correctly
         call_args_list = mock_pipe.load_lora_weights.call_args_list
         actual_paths = [call[0][0] for call in call_args_list]
         assert actual_paths == lora_path_list, f"Expected paths {lora_path_list}, got {actual_paths}"
-        
+
         mock_pipe.set_adapters.assert_called()
 
     def test_load_lora_with_weights_list(self, mock_pipe, mock_args):
@@ -338,7 +338,7 @@ class TestModelSpecificLogic:
     def test_wan22_model_config_validation(self, mock_args):
         """Test Wan2.2 model configuration validation."""
         wan22_models = ["Wan2.2-T2V-A14B", "Wan2.2-I2V-A14B"]
-        
+
         for model in wan22_models:
             mock_args.model = model
             expected_guidance_scales = (3.0, 4.0) if "T2V" in model else (3.5, 3.5)
@@ -348,7 +348,7 @@ class TestModelSpecificLogic:
         """Test VACE model task type validation."""
         vace_models = ["Wan2.1-VACE-14B", "Wan2.1-VACE-1.3B"]
         valid_vace_tasks = ["t2v", "i2v", "v2lf", "flf2v", "random2v", "inpaint", "outpaint", "openpose", "iwri"]
-        
+
         for model in vace_models:
             mock_args.model = model
             for task in valid_vace_tasks:
@@ -357,7 +357,7 @@ class TestModelSpecificLogic:
     def test_hunyuan_model_pipeline_type(self, mock_args):
         """Test HunyuanVideo model pipeline type."""
         hunyuan_models = ["HunyuanVideo-T2V-13B"]
-        
+
         for model in hunyuan_models:
             mock_args.model = model
             expected_pipeline_class = "HunyuanVideoPipeline"
@@ -366,7 +366,7 @@ class TestModelSpecificLogic:
     def test_cogvideo_model_pipeline_type(self, mock_args):
         """Test CogVideoX model pipeline type."""
         cogvideo_models = ["CogVideoX-5b"]
-        
+
         for model in cogvideo_models:
             mock_args.model = model
             expected_pipeline_class = "CogVideoXPipeline"

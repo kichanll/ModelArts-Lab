@@ -73,7 +73,7 @@ class TestRetrieveLatents:
         mock_latent_dist = MagicMock()
         mock_latent_dist.sample.return_value = torch.randn(1, 16, 21, 60, 104)
         mock_output.latent_dist = mock_latent_dist
-        
+
         # Simulate sample mode
         result = mock_output.latent_dist.sample(None)
         assert result is not None
@@ -84,7 +84,7 @@ class TestRetrieveLatents:
         mock_latent_dist = MagicMock()
         mock_latent_dist.mode.return_value = torch.randn(1, 16, 21, 60, 104)
         mock_output.latent_dist = mock_latent_dist
-        
+
         result = mock_output.latent_dist.mode()
         assert result is not None
 
@@ -92,7 +92,7 @@ class TestRetrieveLatents:
         """Test retrieve_latents from latents attribute."""
         mock_output = MagicMock()
         mock_output.latents = torch.randn(1, 16, 21, 60, 104)
-        
+
         # No latent_dist, use latents
         result = mock_output.latents
         assert result is not None
@@ -124,7 +124,7 @@ class TestVaeScaleFactors:
         """Test temporal scale factor default."""
         scale_factor_temporal = 4  # Default
         num_frames = 81
-        
+
         num_latent_frames = (num_frames - 1) // scale_factor_temporal + 1
         assert num_latent_frames == 21
 
@@ -132,7 +132,7 @@ class TestVaeScaleFactors:
         """Test spatial scale factor default."""
         scale_factor_spatial = 8  # Default
         height, width = 480, 832
-        
+
         latent_height = height // scale_factor_spatial
         latent_width = width // scale_factor_spatial
         assert latent_height == 60
@@ -190,11 +190,11 @@ class TestLatentShapeCalculations:
         height, width = 480, 832
         vae_scale_factor_temporal = 4
         vae_scale_factor_spatial = 8
-        
+
         num_latent_frames = (num_frames - 1) // vae_scale_factor_temporal + 1
         latent_height = height // vae_scale_factor_spatial
         latent_width = width // vae_scale_factor_spatial
-        
+
         shape = (batch_size, num_channels_latents, num_latent_frames, latent_height, latent_width)
         assert shape == (1, 16, 21, 60, 104)
 
@@ -213,7 +213,7 @@ class TestBoundaryTimestepLogic:
         """Test high noise stage detection."""
         boundary_timestep = 875.0
         current_timestep = 900.0
-        
+
         is_high_noise = current_timestep >= boundary_timestep
         assert is_high_noise == True
 
@@ -221,7 +221,7 @@ class TestBoundaryTimestepLogic:
         """Test low noise stage detection."""
         boundary_timestep = 875.0
         current_timestep = 800.0
-        
+
         is_high_noise = current_timestep >= boundary_timestep
         assert is_high_noise == False
 
@@ -233,15 +233,15 @@ class TestConditioningIndices:
         """Test processing of conditioning indices."""
         conditioning_indices = [0, 4, 8, 16]
         conditioning_noise_multipliers = [1.0, 0.8, 0.6, 1.0]
-        
+
         cond_frame_latent_indices = []
         noise_multipliers = {}
-        
+
         for i, frame_idx in enumerate(conditioning_indices):
             latent_idx = frame_idx
             cond_frame_latent_indices.append(latent_idx)
             noise_multipliers[latent_idx] = conditioning_noise_multipliers[i]
-        
+
         assert cond_frame_latent_indices == [0, 4, 8, 16]
         assert noise_multipliers == {0: 1.0, 4: 0.8, 8: 0.6, 16: 1.0}
 
@@ -254,10 +254,10 @@ class TestLatentNormalization:
         latents = torch.randn(1, 16, 21, 60, 104)
         latents_mean = torch.zeros(1, 16, 1, 1, 1)
         latents_std = torch.ones(1, 16, 1, 1, 1)
-        
+
         normalized = (latents - latents_mean) / latents_std
         denormalized = normalized * latents_std + latents_mean
-        
+
         assert torch.allclose(latents, denormalized, atol=1e-5)
 
 
@@ -267,26 +267,26 @@ class TestEncodePrompt:
     def test_encode_prompt_single_string(self):
         """Test encoding single string prompt."""
         prompt = "test prompt"
-        
+
         if isinstance(prompt, str):
             batch_size = 1
             prompt_list = [prompt]
         else:
             prompt_list = prompt
             batch_size = len(prompt)
-        
+
         assert batch_size == 1
         assert prompt_list == ["test prompt"]
 
     def test_encode_prompt_list(self):
         """Test encoding list of prompts."""
         prompt = ["prompt1", "prompt2"]
-        
+
         if isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = 1
-        
+
         assert batch_size == 2
 
 
@@ -296,14 +296,14 @@ class TestExpandTimesteps:
     def test_expand_timesteps_enabled(self):
         """Test expand_timesteps enabled behavior."""
         expand_timesteps = True
-        
+
         # When enabled, first_frame_mask is created
         if expand_timesteps:
             # Would create first_frame_mask
             first_frame_mask_created = True
         else:
             first_frame_mask_created = False
-        
+
         assert first_frame_mask_created == True
 
 

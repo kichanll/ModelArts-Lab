@@ -39,7 +39,7 @@ if [ "$MODE" == "multi" ]; then
     echo "启动多卡模式 (卡0、卡1，双卡并行)"
     export ASCEND_RT_VISIBLE_DEVICES=0,1
     N_NPUS=2
-    
+
     torchrun --nproc_per_node=$N_NPUS --master_addr $MASTER_ADDR --master_port $MASTER_PORT image_server.py \
         --host $HOST \
         --port $PORT \
@@ -51,7 +51,7 @@ if [ "$MODE" == "multi" ]; then
 else
     echo "启动单卡模式 (卡0)"
     export ASCEND_RT_VISIBLE_DEVICES=0
-    
+
     python image_server.py \
         --host $HOST \
         --port $PORT \

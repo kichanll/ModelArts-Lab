@@ -153,7 +153,7 @@ class TestWanImagePreprocess:
         assert isinstance(new_width, int)
         assert new_height > 0
         assert new_width > 0
-        
+
         # Verify dimensions are divisible by vae_scale_factor_spatial * patch_size[1]
         # For vae_scale_factor_spatial=8 and patch_size=(1,2,2), dimensions should be divisible by 16
         vae_scale = manager.pipe.vae_scale_factor_spatial

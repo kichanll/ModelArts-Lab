@@ -13,7 +13,7 @@ class InterpolationStateList():
     def __init__(self, frame_indices: typing.List[int], is_skip_list: bool):
         self.frame_indices = frame_indices
         self.is_skip_list = is_skip_list
-        
+
     def is_frame_skipped(self, frame_index):
         is_frame_in_list = frame_index in self.frame_indices
         return self.is_skip_list and is_frame_in_list or not self.is_skip_list and not is_frame_in_list
@@ -31,8 +31,8 @@ def _generic_frame_loop(
         dtype=torch.float16,
         final_logging=True,
         is_skip=False,):
-    
-    def non_timestep_inference(frame0, frame1, n):        
+
+    def non_timestep_inference(frame0, frame1, n):
         middle = return_middle_frame_function(frame0, frame1, None, *return_middle_frame_function_args)
         if n == 1:
             return [middle]
@@ -57,7 +57,7 @@ def _generic_frame_loop(
 
         if interpolation_states is not None and interpolation_states.is_frame_skipped(frame_itr):
             continue
-    
+
         # Generate and append a batch of middle frames
         middle_frame_batches = []
         if (is_skip and skip % 2 == 0) or not is_skip:
@@ -97,13 +97,13 @@ def generic_frame_loop(
         is_skip = False):
 
     return _generic_frame_loop(
-        frames, 
+        frames,
         batch_size,
         device,
-        clear_cache_after_n_frames, 
-        multiplier, 
-        return_middle_frame_function, 
-        *return_middle_frame_function_args, 
+        clear_cache_after_n_frames,
+        multiplier,
+        return_middle_frame_function,
+        *return_middle_frame_function_args,
         interpolation_states=interpolation_states,
         use_timestep=use_timestep,
         dtype=dtype,

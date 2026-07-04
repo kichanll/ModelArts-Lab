@@ -9,10 +9,10 @@ cd ../tools/thirdpart_model/seedvr2
 bash seedvr2.sh
 cd ../../setup/ffmpeg
 bash install_ffmpeg.sh
-cd /home/ma-user 
-git clone https://gitcode.com/Ascend/MindIE-SD 
-cd MindIE-SD 
+cd /home/ma-user
+git clone https://gitcode.com/Ascend/MindIE-SD
+cd MindIE-SD
 git checkout d7eb2b550e4c217abb5d00726b5bb01e5e432059
-python setup.py bdist_wheel  
-cd dist 
+python setup.py bdist_wheel
+cd dist
 pip install mindiesd-*.whl

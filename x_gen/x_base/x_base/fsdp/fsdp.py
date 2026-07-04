@@ -116,7 +116,7 @@ def fsdp_init(pipe, args, is_need_dtype, te_model_type: str, dtype=torch.bfloat1
                                                              is_need_dtype)
             if args.joint:
                 pipe.transformer_3 = transformer_lambda_fsdp(pipe.transformer_3, torch.npu.current_device(),
-                                                             is_need_dtype) 
+                                                             is_need_dtype)
         else:
             transformer_fsdp(pipe, is_need_dtype, dtype=dtype, transformer_2=transformer_2)
 

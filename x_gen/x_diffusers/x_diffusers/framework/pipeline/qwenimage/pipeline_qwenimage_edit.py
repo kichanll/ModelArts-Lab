@@ -31,27 +31,27 @@ def _prepare_latents_data(pipeline, image, batch_size, num_images_per_prompt,
                           height, width, dtype, device, generator, latents):
     """Prepare latents and img_shapes for QwenImageEditPipeline."""
     calculated_width, calculated_height = get_calculated_dimensions(pipeline, image)
-    
+
     # Preprocess image for VAE
     if image is not None and not (isinstance(image, torch.Tensor) and image.size(1) == pipeline.latent_channels):
         vae_image = pipeline.image_processor.resize(image, calculated_height, calculated_width)
         vae_image = pipeline.image_processor.preprocess(vae_image, calculated_height, calculated_width).unsqueeze(2)
     else:
         vae_image = image
-    
+
     # Prepare latents
     num_channels_latents = pipeline.transformer.config.in_channels // 4
     latents, image_latents = pipeline.prepare_latents(
         vae_image, batch_size * num_images_per_prompt,
         num_channels_latents, height, width, dtype, device, generator, latents,
     )
-    
+
     # Prepare img_shapes
     img_shapes = [[
         (1, height // pipeline.vae_scale_factor // 2, width // pipeline.vae_scale_factor // 2),
         (1, calculated_height // pipeline.vae_scale_factor // 2, calculated_width // pipeline.vae_scale_factor // 2),
     ]] * batch_size
-    
+
     return latents, img_shapes, {"image_latents": image_latents}
 
 

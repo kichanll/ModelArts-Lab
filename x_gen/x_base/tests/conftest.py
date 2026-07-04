@@ -71,7 +71,7 @@ def create_mock_args(**overrides):
 def create_mock_pipe(pipeline_name="WanPipeline"):
     """Create a mock DiffusionPipeline with specified name."""
     MockPipelineClass = _create_mock_diffusion_pipeline_class()
-    
+
     pipe = MockPipelineClass()
     pipe.__class__.__name__ = pipeline_name
     pipe.transformer = MagicMock()

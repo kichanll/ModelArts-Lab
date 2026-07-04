@@ -28,7 +28,7 @@ teacache:
         coefficients: [2.39676752e+03, -1.31110545e+03, 2.01331979e+02, -8.29855975e+00, 1.37887774e-01]
         ret_steps: 2
         cutoff_mode: "early"
-        
+
     "2.1-T2V-14B":
       use_ref_steps:
         coefficients: [-3.03318725e+05, 4.90537029e+04, -2.65530556e+03, 5.87365115e+01, -3.15583525e-01]
@@ -38,7 +38,7 @@ teacache:
         coefficients: [-5784.54975374, 5449.50911966, -1811.16591783, 256.27178429, -13.02252404]
         ret_steps: 2
         cutoff_mode: "early"
-        
+
     "2.1-I2V-480P":
       threshold: 0.18
       use_ref_steps:
@@ -49,7 +49,7 @@ teacache:
         coefficients: [-3.02331670e+02, 2.23948934e+02, -5.25463970e+01, 5.87348440e+00, -2.01973289e-01]
         ret_steps: 2
         cutoff_mode: "early"
-        
+
     "2.1-I2V-720P":
       threshold: 0.18
       use_ref_steps:
@@ -60,29 +60,29 @@ teacache:
         coefficients: [-114.36346466, 65.26524496, -18.82220707, 4.91518089, -0.23412683]
         ret_steps: 2
         cutoff_mode: "early"
-  
+
   hunyuan:
     "HunyuanVideo-13B":
       threshold: 0.1
       coefficients: [7.33226126e+02, -4.01131952e+02, 6.75869174e+01, -3.14987800e+00, 9.61237896e-02]
-  
+
   cogvideox:
     "CogVideoX-2b":
       threshold: 0.1
       coefficients: [-3.10658903e+01, 2.54732368e+01, -5.92380459e+00, 1.75769064e+00, -3.61568434e-03]
-      
+
     "CogVideoX-5b":
       threshold: 0.1
       coefficients: [-1.53880483e+03, 8.43202495e+02, -1.34363087e+02, 7.97131516e+00, -5.23162339e-02]
-      
+
     "CogVideoX-5b-I2V":
       threshold: 0.1
       coefficients: [-1.53880483e+03, 8.43202495e+02, -1.34363087e+02, 7.97131516e+00, -5.23162339e-02]
-      
+
     "CogVideoX1.5-5B":
       threshold: 0.1
       coefficients: [2.50210439e+02, -1.65061612e+02, 3.57804877e+01, -7.81551492e-01, 3.58559703e-02]
-      
+
     "CogVideoX1.5-5B-I2V":
       threshold: 0.1
       coefficients: [1.22842302e+02, -1.04088754e+02, 2.62981677e+01, -3.06009921e-01, 3.71213220e-02]
@@ -95,17 +95,17 @@ magcache:
     "2.1-T2V-1.3B":
       threshold: 0.12
       K: 4
-      
+
     "2.1-I2V-480P":
       threshold: 0.05
       K: 6
       retention_ratio: 0.1
-      
+
     "2.1-I2V-720P":
       threshold: 0.05
       K: 6
       retention_ratio: 0.1
-      
+
     "2.2-T2V-A14B":
       threshold: 0.06
       K: 2
@@ -114,7 +114,7 @@ magcache:
         threshold: 0.1
         K: 6
         retention_ratio: 0.1
-      
+
     "2.2-I2V-A14B":
       threshold: 0.06
       K: 2
@@ -132,7 +132,7 @@ defaults:
     threshold_t2v: 0.1
     threshold_i2v: 0.18
     use_ref_steps: true
-    
+
   magcache:
     threshold: 0.24
     K: 6

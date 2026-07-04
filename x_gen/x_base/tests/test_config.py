@@ -327,7 +327,7 @@ class TestQuantLayerConfig:
 
     def test_should_quantize_with_include_patterns(self):
         """Test should_quantize correctly includes patterns.
-        
+
         Note: This test uses real torch.nn.Linear to ensure isinstance check works.
         The mock setup happens BEFORE config_loader import, so the parsed_layer_types
         in QuantLayerConfig will match our mocked nn.Linear.
@@ -342,18 +342,18 @@ class TestQuantLayerConfig:
         # and QuantLayerConfig's _layer_type_map uses nn.Linear at definition time
         # Since we mock torch BEFORE importing config_loader (via autouse fixture),
         # the nn.Linear in config_loader should be our mock
-        
+
         # Test the pattern matching logic (this is the main point)
         # If isinstance fails, we need to check why
         result = config.should_quantize("img_mlp.0", layer)
-        
+
         # Debug: if fails, skip with reason
         if not result:
             # Check if it's an isinstance issue
             is_linear = isinstance(layer, config._parsed_layer_types)
             if not is_linear:
                 pytest.skip(f"isinstance check failed: {type(layer)} not in {config._parsed_layer_types}")
-        
+
         assert result, "img_mlp.0 should be quantized"
         assert config.should_quantize("txt_mlp.dense", layer)
         assert not config.should_quantize("other_layer", layer)

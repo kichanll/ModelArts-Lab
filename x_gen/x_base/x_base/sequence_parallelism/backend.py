@@ -23,20 +23,20 @@ class CollectiveBackend(Protocol):
 
 class BaseCommBackend(ABC):
     """通信后端抽象基类"""
-    
+
     @property
     @abstractmethod
     def name(self) -> str:
         pass
-    
+
     @abstractmethod
     def all_gather(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]:
         pass
-    
+
     @abstractmethod
     def reduce_scatter(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]:
         pass
-    
+
     @abstractmethod
     def all_to_all_4d(self, tensor: Tensor, scatter_dim: int, gather_dim: int, group: ProcessGroup, use_sync: bool = False) -> Tensor:
         pass
@@ -44,11 +44,11 @@ class BaseCommBackend(ABC):
 
 class TorchDistBackend(BaseCommBackend):
     """PyTorch Distributed 后端"""
-    
+
     @property
     def name(self) -> str:
         return "torch_dist"
-    
+
     def all_gather(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]:
         world_size = dist.get_world_size(group)
         if world_size == 1:
@@ -61,7 +61,7 @@ class TorchDistBackend(BaseCommBackend):
             return output, handle
         dist.all_gather(buffer_list, tensor, group=group)
         return output, None
-    
+
     def reduce_scatter(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]:
         world_size = dist.get_world_size(group)
         if world_size == 1:
@@ -75,12 +75,12 @@ class TorchDistBackend(BaseCommBackend):
             return output, handle
         dist.reduce_scatter(output, buffer_list, group=group)
         return output, None
-    
+
     def all_to_all_4d(self, tensor: Tensor, scatter_dim: int, gather_dim: int, group: ProcessGroup, use_sync: bool = False) -> Tensor:
         world_size = dist.get_world_size(group)
         if world_size == 1:
             return tensor
-        
+
         if scatter_dim == 2 and gather_dim == 1:
             # (bs, seqlen/P, h) -> (bs, seqlen, h/P)
             bs, shard_seqlen, h = tensor.shape
@@ -92,7 +92,7 @@ class TorchDistBackend(BaseCommBackend):
             if use_sync:
                 torch.cuda.synchronize()
             return output.reshape(seqlen, bs, shard_h).transpose(0, 1).contiguous().reshape(bs, seqlen, shard_h)
-        
+
         elif scatter_dim == 1 and gather_dim == 2:
             # (bs, seqlen, h/P) -> (bs, seqlen/P, h)
             bs, seqlen, shard_h = tensor.shape
@@ -104,9 +104,9 @@ class TorchDistBackend(BaseCommBackend):
             if use_sync:
                 torch.cuda.synchronize()
             return output.reshape(h, shard_seqlen, bs).transpose(0, 2).contiguous().reshape(bs, shard_seqlen, h)
-        
+
         raise ValueError(f"Invalid dims: scatter={scatter_dim}, gather={gather_dim}")
-    
+
     def model_sharding(self, model: torch.nn.Module, group: Optional[ProcessGroup] = None) -> None:
         rank = dist.get_rank(group)
         world_size = dist.get_world_size(group)

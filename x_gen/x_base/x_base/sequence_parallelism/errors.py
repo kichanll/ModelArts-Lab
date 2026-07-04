@@ -8,7 +8,7 @@ from typing import Optional
 
 class SequenceParallelError(Exception):
     """序列并行基础错误
-    
+
     所有序列并行相关异常的基类。
     """
     pass
@@ -16,7 +16,7 @@ class SequenceParallelError(Exception):
 
 class PadNotSetError(SequenceParallelError):
     """Padding 值未设置错误
-    
+
     当尝试获取未设置的 padding 值时抛出。
     """
     def __init__(self, name: str):
@@ -29,7 +29,7 @@ class PadNotSetError(SequenceParallelError):
 
 class ProcessGroupError(SequenceParallelError):
     """ProcessGroup 相关错误
-    
+
     当 ProcessGroup 初始化或使用出现问题时抛出。
     """
     def __init__(self, message: str, group: Optional[str] = None):
@@ -40,7 +40,7 @@ class ProcessGroupError(SequenceParallelError):
 
 class ParallelConfigError(SequenceParallelError):
     """并行配置错误
-    
+
     当并行配置参数不合法或不兼容时抛出。
     """
     def __init__(self, message: str):
@@ -49,13 +49,13 @@ class ParallelConfigError(SequenceParallelError):
 
 class IncompatibleDimensionError(SequenceParallelError):
     """维度不兼容错误
-    
+
     当张量维度不能被并行度整除时抛出。
     """
     def __init__(
-        self, 
-        dim: int, 
-        size: int, 
+        self,
+        dim: int,
+        size: int,
         divisor: int,
         operation: str = "split"
     ):
@@ -72,7 +72,7 @@ class IncompatibleDimensionError(SequenceParallelError):
 
 class BackendNotAvailableError(SequenceParallelError):
     """通信后端不可用错误
-    
+
     当请求的通信后端未安装或不可用时抛出。
     """
     def __init__(self, backend_name: str, install_hint: Optional[str] = None):
@@ -85,7 +85,7 @@ class BackendNotAvailableError(SequenceParallelError):
 
 class AllToAllDimensionError(SequenceParallelError):
     """AllToAll 维度参数错误
-    
+
     当 scatter_idx 或 gather_idx 参数不合法时抛出。
     """
     def __init__(self, scatter_idx: int, gather_idx: int):

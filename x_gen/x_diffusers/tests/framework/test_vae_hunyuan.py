@@ -30,7 +30,7 @@ class TestAutoencoderKLHunyuanVideoConfig:
         act_fn = "silu"
         spatial_compression_ratio = 8
         temporal_compression_ratio = 4
-        
+
         assert in_channels == 3
         assert latent_channels == 16
         assert block_out_channels == (128, 256, 512, 512)
@@ -41,7 +41,7 @@ class TestAutoencoderKLHunyuanVideoConfig:
         """Test compression ratio values."""
         spatial_compression_ratio = 8
         temporal_compression_ratio = 4
-        
+
         # Spatial: 8x downsampling
         # Temporal: 4x downsampling
         assert spatial_compression_ratio == 8
@@ -56,7 +56,7 @@ class TestAutoencoderKLHunyuanVideoConfig:
         """Test time_compression_ratio is stored."""
         temporal_compression_ratio = 4
         time_compression_ratio = temporal_compression_ratio
-        
+
         assert time_compression_ratio == 4
 
 
@@ -67,11 +67,11 @@ class TestQuantConvLayers:
         """Test quant conv kernel shape."""
         latent_channels = 16
         kernel_size = 1
-        
+
         # quant_conv: 2 * latent_channels -> 2 * latent_channels
         in_ch = 2 * latent_channels
         out_ch = 2 * latent_channels
-        
+
         assert in_ch == 32
         assert out_ch == 32
 
@@ -79,11 +79,11 @@ class TestQuantConvLayers:
         """Test post quant conv kernel shape."""
         latent_channels = 16
         kernel_size = 1
-        
+
         # post_quant_conv: latent_channels -> latent_channels
         in_ch = latent_channels
         out_ch = latent_channels
-        
+
         assert in_ch == 16
         assert out_ch == 16
 
@@ -96,7 +96,7 @@ class TestTileSettings:
         tile_sample_min_height = 256
         tile_sample_min_width = 256
         tile_sample_min_num_frames = 16
-        
+
         assert tile_sample_min_height == 256
         assert tile_sample_min_width == 256
         assert tile_sample_min_num_frames == 16
@@ -106,7 +106,7 @@ class TestTileSettings:
         tile_sample_stride_height = 192
         tile_sample_stride_width = 192
         tile_sample_stride_num_frames = 12
-        
+
         assert tile_sample_stride_height == 192
         assert tile_sample_stride_width == 192
         assert tile_sample_stride_num_frames == 12
@@ -115,9 +115,9 @@ class TestTileSettings:
         """Test tile latent minimum size calculation."""
         tile_sample_min_size = 256
         block_out_channels = (128, 256, 512, 512)
-        
+
         tile_latent_min_size = int(tile_sample_min_size / (2 ** (len(block_out_channels) - 1)))
-        
+
         assert tile_latent_min_size == 32
 
     def test_tile_overlap_factor(self):
@@ -133,21 +133,21 @@ class TestEnableTiling:
         """Test enable_tiling sets use_tiling to True."""
         use_tiling = False
         use_tiling = True  # enable_tiling()
-        
+
         assert use_tiling == True
 
     def test_enable_tiling_updates_params(self):
         """Test enable_tiling updates tile parameters."""
         tile_sample_min_height = 256
         tile_sample_min_width = 256
-        
+
         # enable_tiling with custom values
         new_height = 320
         new_width = 320
-        
+
         tile_sample_min_height = new_height or tile_sample_min_height
         tile_sample_min_width = new_width or tile_sample_min_width
-        
+
         assert tile_sample_min_height == 320
         assert tile_sample_min_width == 320
 
@@ -155,7 +155,7 @@ class TestEnableTiling:
         """Test disable_tiling sets use_tiling to False."""
         use_tiling = True
         use_tiling = False  # disable_tiling()
-        
+
         assert use_tiling == False
 
 
@@ -166,14 +166,14 @@ class TestEnableSlicing:
         """Test enable_slicing sets use_slicing to True."""
         use_slicing = False
         use_slicing = True  # enable_slicing()
-        
+
         assert use_slicing == True
 
     def test_disable_slicing(self):
         """Test disable_slicing sets use_slicing to False."""
         use_slicing = True
         use_slicing = False  # disable_slicing()
-        
+
         assert use_slicing == False
 
 
@@ -217,9 +217,9 @@ class TestMaxShapeSettings:
         """Test tile latent minimum t-size calculation."""
         tile_sample_min_tsize = 64
         temporal_compression_ratio = 4
-        
+
         tile_latent_min_tsize = tile_sample_min_tsize // temporal_compression_ratio
-        
+
         assert tile_latent_min_tsize == 16
 
 
@@ -254,7 +254,7 @@ class TestEncoderDecoderStructure:
             "HunyuanVideoUpBlock3D",
             "HunyuanVideoUpBlock3D",
         )
-        
+
         assert len(down_block_types) == 4
         assert len(up_block_types) == 4
 

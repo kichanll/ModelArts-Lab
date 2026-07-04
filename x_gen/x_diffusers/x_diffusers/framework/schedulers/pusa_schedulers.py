@@ -37,7 +37,7 @@ class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
         self.extra_one_step = extra_one_step
         self.reverse_sigmas = reverse_sigmas
         self.set_timesteps(num_inference_steps)
-        
+
 
     def set_timesteps(self, num_inference_steps=100, denoising_strength=1.0, training=False, shift=None):
         if shift is not None:
@@ -90,11 +90,11 @@ class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
                 valid_indices = timestep_id + 1 < len(self.timesteps)
                 if torch.any(valid_indices):
                     # Convert indices to the appropriate type for indexing
-                    valid_timestep_ids = timestep_id[valid_indices] 
+                    valid_timestep_ids = timestep_id[valid_indices]
                     sigma_[valid_indices] = self.sigmas[(valid_timestep_ids + 1).to(torch.long)]
             else:
                 sigma_ = self.sigmas[(timestep_id + 1).to(torch.long)]
-                
+
             if cond_frame_latent_indices is not None and noise_multipliers is not None:
                 for latent_idx in cond_frame_latent_indices:
                     if timestep_full[:,latent_idx] == 0:
@@ -111,11 +111,11 @@ class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
                 zero_indices = torch.where(timestep == 0)[1].to(torch.long)
                 sigma[:,:,zero_indices] = 0
                 sigma_[:,:,zero_indices] = 0
-            
+
             prev_sample = sample + model_output * (sigma_ - sigma)
 
         return prev_sample
-    
+
     def add_noise_for_conditioning_frames(self, original_samples, noise, timestep, noise_multiplier=None):
         if isinstance(timestep, torch.Tensor):
             self.timesteps = self.timesteps.to(timestep.device)
@@ -125,9 +125,9 @@ class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
             sigma = self.sigmas[timestep_id]
         else:
             timestep_id = torch.argmin((self.timesteps.unsqueeze(1) - timestep).abs(), dim=0)
-            sigma = self.sigmas[timestep_id].unsqueeze(0).unsqueeze(1).unsqueeze(3).unsqueeze(4).to(original_samples.device)            
+            sigma = self.sigmas[timestep_id].unsqueeze(0).unsqueeze(1).unsqueeze(3).unsqueeze(4).to(original_samples.device)
             sigma= sigma * noise_multiplier # timestep = sigma * 1000, equivalent, so directly use multiplier here
-        
+
         sample = (1 - sigma) * original_samples + sigma * noise
 
         return sample

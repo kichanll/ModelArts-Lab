@@ -82,7 +82,7 @@ def pytest_configure(config):
     for module_name in _ISOLATED_MODULES:
         if module_name in sys.modules:
             config._framework_original_modules[module_name] = sys.modules[module_name]
-    
+
     # Register markers
     config.addinivalue_line(
         "markers", "framework_test: mark test as a framework test that uses mocks"
@@ -106,9 +106,9 @@ _current_module_is_framework = False
 def pytest_collection_modifyitems(session, config, items):
     """Identify framework tests and mark them."""
     global _current_module_is_framework
-    
+
     framework_tests_dir = Path(__file__).parent
-    
+
     for item in items:
         # Check if the test is in the framework directory
         test_path = Path(item.fspath)
@@ -119,7 +119,7 @@ def pytest_collection_modifyitems(session, config, items):
 @pytest.fixture(scope="module", autouse=True)
 def isolate_framework_module(request):
     """Module-level fixture to isolate framework tests.
-    
+
     Saves sys.modules state before each module and restores after.
     """
     # Check if this is a framework test module
@@ -127,32 +127,32 @@ def isolate_framework_module(request):
     if test_module is None:
         yield
         return
-    
+
     module_file = getattr(test_module, '__file__', None)
     if module_file is None:
         yield
         return
-    
+
     framework_tests_dir = Path(__file__).parent
     test_path = Path(module_file)
-    
+
     is_framework_test = (
-        framework_tests_dir in test_path.parents or 
+        framework_tests_dir in test_path.parents or
         test_path.parent == framework_tests_dir
     )
-    
+
     if not is_framework_test:
         yield
         return
-    
+
     # Save current state of isolated modules
     saved_modules = {}
     for module_name in _ISOLATED_MODULES:
         if module_name in sys.modules:
             saved_modules[module_name] = sys.modules[module_name]
-    
+
     yield
-    
+
     # Restore: remove any new mocked modules
     for module_name in _ISOLATED_MODULES:
         if module_name in saved_modules:
@@ -179,10 +179,10 @@ class MockBaseTunerLayer(abc.ABC):
         self.lora_embedding_B = {}
         self.disable_adapters = False
         self.merged = False
-    
+
     def get_base_layer(self):
         return self.base_layer
-    
+
     def update_layer(self, *args, **kwargs):
         pass
 
@@ -224,7 +224,7 @@ class MockBaseOutput:
 def load_module_directly(module_name: str, file_path: str):
     """
     Load a Python module directly from file, bypassing package __init__.py.
-    
+
     Args:
         module_name: Name to register the module as in sys.modules
         file_path: Path to the Python file to load
@@ -237,7 +237,7 @@ def load_module_directly(module_name: str, file_path: str):
         # Resolve relative to this conftest.py location
         conftest_dir = Path(__file__).parent
         path = conftest_dir.parent.parent / "x_diffusers" / file_path
-    
+
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
@@ -255,13 +255,13 @@ def setup_diffusers_mock():
     Returns the mock_diffusers object.
     """
     mock_diffusers = MagicMock()
-    
+
     # configuration_utils
     mock_config_utils = MagicMock()
     mock_config_utils.ConfigMixin = MockConfigMixin
     mock_config_utils.register_to_config = lambda f: f
     mock_diffusers.configuration_utils = mock_config_utils
-    
+
     # utils
     mock_utils = MagicMock()
     mock_utils.BaseOutput = MockBaseOutput
@@ -272,12 +272,12 @@ def setup_diffusers_mock():
     mock_utils.is_scipy_available = lambda: True
     mock_utils.replace_example_docstring = lambda f: f
     mock_diffusers.utils = mock_utils
-    
+
     # utils.torch_utils
     mock_torch_utils = MagicMock()
     mock_torch_utils.randn_tensor = MagicMock()
     mock_diffusers.utils.torch_utils = mock_torch_utils
-    
+
     # models
     mock_models = MagicMock()
     mock_models.attention = MagicMock()
@@ -285,38 +285,38 @@ def setup_diffusers_mock():
     mock_models.transformers = MagicMock()
     mock_models.autoencoders = MagicMock()
     mock_diffusers.models = mock_models
-    
+
     # schedulers
     mock_schedulers = MagicMock()
     mock_schedulers.scheduling_utils = MagicMock()
     mock_schedulers.scheduling_utils.SchedulerMixin = MockSchedulerMixin
     mock_diffusers.schedulers = mock_schedulers
-    
+
     # pipelines
     mock_pipelines = MagicMock()
     mock_pipelines.pipeline_utils = MagicMock()
     mock_pipelines.pipeline_utils.DiffusionPipeline = MagicMock
     mock_diffusers.pipelines = mock_pipelines
-    
+
     # loaders
     mock_loaders = MagicMock()
     mock_loaders.peft = MagicMock()
     mock_loaders.peft._SET_ADAPTER_SCALE_FN_MAPPING = {}
     mock_diffusers.loaders = mock_loaders
-    
+
     # callbacks
     mock_diffusers.callbacks = MagicMock()
     mock_diffusers.callbacks.MultiPipelineCallbacks = MagicMock
     mock_diffusers.callbacks.PipelineCallback = MagicMock
-    
+
     # image_processor
     mock_diffusers.image_processor = MagicMock()
     mock_diffusers.image_processor.PipelineImageInput = MagicMock
-    
+
     # video_processor
     mock_diffusers.video_processor = MagicMock()
     mock_diffusers.video_processor.VideoProcessor = MagicMock
-    
+
     # Register in sys.modules
     sys.modules["diffusers"] = mock_diffusers
     sys.modules["diffusers.configuration_utils"] = mock_config_utils
@@ -335,7 +335,7 @@ def setup_diffusers_mock():
     sys.modules["diffusers.callbacks"] = mock_diffusers.callbacks
     sys.modules["diffusers.image_processor"] = mock_diffusers.image_processor
     sys.modules["diffusers.video_processor"] = mock_diffusers.video_processor
-    
+
     return mock_diffusers
 
 
@@ -347,30 +347,30 @@ def setup_peft_mock():
     mock_peft = MagicMock()
     mock_lora_model = MagicMock(name="LoraModel")
     mock_lora_model._create_new_module = None
-    
+
     mock_peft.tuners = MagicMock()
     mock_peft.tuners.lora = MagicMock()
     mock_peft.tuners.lora.model = MagicMock()
     mock_peft.tuners.lora.model.LoraModel = mock_lora_model
     mock_peft.tuners.tuners_utils = MagicMock()
     mock_peft.tuners.tuners_utils.BaseTunerLayer = MockBaseTunerLayer
-    
+
     # Create individual dispatch function mocks
     for name in ['aqlm', 'awq', 'eetq', 'gptq', 'hqq', 'torchao']:
         module = MagicMock()
         setattr(mock_peft.tuners.lora, name, module)
         setattr(module, f'dispatch_{name}', MagicMock(return_value=None))
-    
+
     # tp_layer special case
     tp_layer = MagicMock()
     tp_layer.dispatch_megatron = MagicMock(return_value=None)
     mock_peft.tuners.lora.tp_layer = tp_layer
-    
+
     mock_peft.tuners.lora.layer = MagicMock()
     mock_peft.tuners.lora.layer.Conv2d = MagicMock(name="Conv2d")
     mock_peft.tuners.lora.layer.LoraLayer = MockLoraLayer
     mock_peft.tuners.lora.layer.dispatch_default = MagicMock(return_value=None)
-    
+
     # Register in sys.modules
     sys.modules["peft"] = mock_peft
     sys.modules["peft.tuners"] = mock_peft.tuners
@@ -385,7 +385,7 @@ def setup_peft_mock():
     sys.modules["peft.tuners.lora.torchao"] = mock_peft.tuners.lora.torchao
     sys.modules["peft.tuners.lora.tp_layer"] = mock_peft.tuners.lora.tp_layer
     sys.modules["peft.tuners.tuners_utils"] = mock_peft.tuners.tuners_utils
-    
+
     return mock_peft, mock_lora_model
 
 
@@ -432,7 +432,7 @@ def get_x_diffusers_path():
 def get_framework_module_path(module_rel_path: str):
     """
     Get the full path to a framework module.
-    
+
     Args:
         module_rel_path: Relative path from x_diffusers/framework/, e.g., "lora/lora.py"
 

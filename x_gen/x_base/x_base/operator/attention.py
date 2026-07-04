@@ -133,7 +133,7 @@ class AttentionManager:
 
     def disable_sparse_attention(self):
         self.is_sparse_attention = False
-        
+
     def set_t_idx(self, t_idx):
         self.t_idx = t_idx
 

@@ -24,7 +24,7 @@ class LongCatImageEditPipeline(
     BaseLongCatImagePipelineMixin, LongCatImageEditPipeline
 ):
     """LongCatImage Edit Pipeline 扩展类
-    
+
     继承自 LongCatImageEditPipeline，混入 BaseLongCatImagePipelineMixin
     提供图像编辑、CFG 并行等特性。
     """
@@ -148,16 +148,16 @@ class LongCatImageEditPipeline(
         calculated_width: int,
     ) -> tuple[torch.Tensor | PIL.Image.Image | None, PIL.Image.Image | None]:
         """预处理输入图像
-        
+
         Returns:
             tuple: (processed_image, prompt_image)
         """
         if image is None:
             return None, None
-            
+
         if isinstance(image, torch.Tensor) and image.size(1) == self.latent_channels:
             return image, None
-            
+
         image = self.image_processor.resize(image, calculated_height, calculated_width)
         prompt_image = self.image_processor.resize(
             image, calculated_height // 2, calculated_width // 2
@@ -176,7 +176,7 @@ class LongCatImageEditPipeline(
         cfg_parallel_size: int,
     ) -> tuple[torch.FloatTensor, Any, torch.FloatTensor | None, Any | None]:
         """CFG 模式下的 prompt 编码
-        
+
         Returns:
             tuple: (prompt_embeds, text_ids, negative_prompt_embeds, negative_text_ids)
         """

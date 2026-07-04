@@ -55,7 +55,7 @@ class OffloadManager_For_Save_Memory:
         for tag, grp in self.groups.items():
             for i in range(min(self.keep_n[tag], len(grp))):
                 grp[i].to(self.device, non_blocking=False)
-        
+
         # offload 后部分层到CPU
         ########################
         for tag, grp in self.groups.items():
@@ -104,7 +104,7 @@ class OffloadManager_For_Save_Memory:
             for tensor in self.zd[prev_idx]:
                 self._release_tensor(tensor)
             # for p in params[prev_idx]:
-                
+
         setattr(prev_mod, "_so_freed", True)
     def _maybe_free_prev_layer(self, prev_idx: int, keep_n: int,
                                 grp: Sequence[torch.nn.Module],
@@ -158,11 +158,11 @@ class OffloadManager_For_Save_Memory:
         if dist.get_rank()==0:
             with torch.cuda.stream(self.h2d_stream):
                 for value, value1 in zip(self.npu_space[npu_space_id],self.fuben[next_idx]):
-                    value.data.copy_(value1.data, non_blocking=True)#export ASCEND_RT_VISIBLE_DEVICES=1        
+                    value.data.copy_(value1.data, non_blocking=True)#export ASCEND_RT_VISIBLE_DEVICES=1
                 evt = torch.cuda.Event()
                 self.h2d_stream.record_event(evt)
                 setattr(next_mod, "_so_h2d_evt", evt)
-            
+
     def _do_boardcast(self, next_idx: int,
                      params: List[List[torch.Tensor]],
                      next_mod: torch.nn.Module, npu_space_id) -> None:
@@ -185,7 +185,7 @@ class OffloadManager_For_Save_Memory:
             evt = torch.cuda.Event()
             self.h2d_stream.record_event(evt)
             setattr(next_mod, "_so_boardcast_evt", evt)
-        
+
 
     # === 重写：把复杂度从 hook 中“搬走”，让它只做流程编排 ===
     def _prefetch_factory(self, tag: str):
@@ -224,7 +224,7 @@ class OffloadManager_For_Save_Memory:
         def hook(module, _inp, _out):
             if module.index < keep_n:
                 return
-            
+
             # 记录本层计算完成事件，但不立即释放显存
             # 显存释放将在下一层的prefetch_hook中进行
             evt = torch.cuda.Event()
@@ -232,7 +232,7 @@ class OffloadManager_For_Save_Memory:
             setattr(module, "_so_compute_evt", evt)
             setattr(module, "_so_needs_free", True)
             setattr(module, "_so_freed", False)
-            
+
         return hook
 
     @staticmethod
@@ -255,7 +255,7 @@ class OffloadManager_For_Save_Memory:
                         p.p_cpu = p.data
                     tmp_npu_space.append(torch.empty_like(p.p_cpu,device=self.device))
                 self.npu_space.append(tmp_npu_space)
-                    
+
         tmp=[]
         if self.rank==0:
             self.fuben=[]
@@ -285,14 +285,14 @@ class OffloadManager_For_Save_Memory:
                             p1.copy_(p.data, non_blocking=True)
 
             torch.cuda.current_stream().wait_stream(self.d2h_stream)
-            
+
         else:
             for idx in range(self.keep_n[tag],len(grp)):
                 for p in self.layer_params[tag][idx]:
                     self._release_tensor(p)
 
-            
-            
+
+
 
     @staticmethod
     def _release_tensor(p: torch.Tensor):
@@ -320,7 +320,7 @@ class OffloadManager_For_Save_Memory:
 
     def _remove_hooks(self):
         """移除所有hooks"""
-        for h in self.handles: 
+        for h in self.handles:
             h.remove()
         self.handles.clear()
 

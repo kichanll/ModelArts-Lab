@@ -302,18 +302,18 @@ if os.path.exists(_conftest_npu_path):
     _expected_dir = os.path.dirname(os.path.abspath(__file__))
     if not _abs_path.startswith(_expected_dir):
         raise ImportError(f"Security: conftest_npu.py must be in the same directory. Path: {_abs_path}")
-    
+
     # 安全性检查：确保文件权限合理（不可被其他用户写入）
     _file_stat = os.stat(_conftest_npu_path)
     if _file_stat.st_mode & stat.S_IWOTH:
         raise ImportError(f"Security: conftest_npu.py has insecure permissions (world-writable). Path: {_abs_path}")
-    
+
     _spec = importlib.util.spec_from_file_location("conftest_npu", _conftest_npu_path)
     if _spec is None or _spec.loader is None:
         raise ImportError(f"Security: Failed to create module spec for conftest_npu.py. Path: {_abs_path}")
     _conftest_npu = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_conftest_npu)
-    
+
     # Expose key mock utilities
     mock_torch_npu = _conftest_npu.mock_torch_npu
     mock_x_base = _conftest_npu.mock_x_base

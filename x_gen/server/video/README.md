@@ -451,7 +451,7 @@ print(f"Task submitted: {task_id}")
 while True:
     status = requests.get(f"http://127.0.0.1:5001/status/{task_id}").json()
     print(f"Status: {status['status']}")
-    
+
     if status["status"] == "completed":
         print(f"Video saved to: {status['result']['video_path']}")
         print(f"Inference time: {status['infer_time']:.2f}s")
@@ -459,7 +459,7 @@ while True:
     elif status["status"] == "failed":
         print(f"Error: {status['error']}")
         break
-    
+
     time.sleep(10)
 ```
 
@@ -472,5 +472,5 @@ while True:
 | 8 x 910B3 | ~60s | 4.3x |
 
 > 实际性能取决于分辨率、帧数、模型等参数
-> 
+>
 > 默认开启: `atten_laser`, `matmul_a8w8`, `rope_fused`

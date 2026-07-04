@@ -23,7 +23,7 @@ class LongCatImagePipeline(
     BaseLongCatImagePipelineMixin, LongCatImagePipeline
 ):
     """LongCatImage Pipeline 扩展类
-    
+
     继承自 LongCatImagePipeline，混入 BaseLongCatImagePipelineMixin
     提供 CFG 并行、CFG renorm、prompt rewrite 等增强特性。
     """

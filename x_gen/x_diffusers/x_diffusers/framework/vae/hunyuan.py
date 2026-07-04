@@ -335,8 +335,8 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
 
     def _tiled_encode_parallel(self, x: torch.Tensor) -> torch.Tensor:
 
-        # TODO: Disabled for world_size=8, as a different tile partitioning is required. 
-        # Partition matching also does not give performance gain over synchronous mode 
+        # TODO: Disabled for world_size=8, as a different tile partitioning is required.
+        # Partition matching also does not give performance gain over synchronous mode
         # due to long communication time.
         if dist.get_world_size() == 8:
             x = self.encoder(x)

@@ -9,13 +9,13 @@
 get_repo_info() {
     local repo_name=$1
     local config_file="repo_config.txt"
-    
+
     # 检查配置文件是否存在
     if [ ! -f "$config_file" ]; then
         echo "错误：配置文件 $config_file 不存在！"
         exit 1
     fi
-    
+
     # 从配置文件中匹配仓库名，提取地址和commit（跳过注释行）
     repo_info=$(grep -v "^#" "$config_file" | grep "^$repo_name " | awk '{print $2, $3}')
     if [ -z "$repo_info" ]; then

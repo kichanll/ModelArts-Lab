@@ -1,7 +1,7 @@
 """
 BaseLongCatImagePipelineMixin - LongCatImage Pipeline 共享逻辑基类
 
-由于 xDiffusersLongCatImagePipeline 和 xDiffusersLongCatImageEditPipeline 
+由于 xDiffusersLongCatImagePipeline 和 xDiffusersLongCatImageEditPipeline
 继承自不同的 diffusers 基类，使用 Mixin 模式实现代码复用。
 """
 
@@ -30,7 +30,7 @@ else:
 
 class BaseLongCatImagePipelineMixin:
     """LongCatImage Pipeline 共享逻辑 Mixin 基类
-    
+
     只抽象真正值得复用的核心逻辑：
     - Timesteps 准备
     - 去噪循环（含 CFG 非并行/并行模式）

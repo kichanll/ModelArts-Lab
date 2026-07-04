@@ -19,30 +19,30 @@ from .errors import PadNotSetError
 class PadManager:
     """Padding 管理器"""
     _pads: Dict[str, int] = field(default_factory=dict)
-    
+
     def set(self, name: str, dim_size: int, sp_size: int) -> int:
         """计算并设置 padding"""
         pad = (sp_size - (dim_size % sp_size)) % sp_size
         self._pads[name] = pad
         return pad
-    
+
     def set_from_group(self, name: str, dim_size: int, group: ProcessGroup) -> int:
         """从 ProcessGroup 计算 padding"""
         return self.set(name, dim_size, dist.get_world_size(group))
-    
+
     def get(self, name: str) -> int:
         """获取 padding，不存在则抛出 PadNotSetError"""
         if name not in self._pads:
             raise PadNotSetError(name)
         return self._pads[name]
-    
+
     def get_or_default(self, name: str, default: int = 0) -> int:
         """获取 padding，不存在则返回默认值"""
         return self._pads.get(name, default)
-    
+
     def is_set(self, name: str) -> bool:
         return name in self._pads
-    
+
     def clear(self) -> None:
         self._pads.clear()
 
