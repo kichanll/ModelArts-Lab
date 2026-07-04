@@ -163,13 +163,12 @@ class ParallelConfig:
         total = self.dp_size * self.cp_size * self.sp_size
         if total != world_size:
             raise ParallelConfigError(
-                f"dp({self.dp_size}) * cp({self.cp_size}) * sp({self.sp_size}) = {total}, "
-                f"but world_size = {world_size}"
+                f"dp({self.dp_size}) * cp({self.cp_size}) * sp({self.sp_size}) = {total}, but world_size = {world_size}"
             )
         if self.sp_ulysses_size and self.sp_ring_size:
             if self.sp_ulysses_size * self.sp_ring_size != self.sp_size:
                 raise ParallelConfigError(
-                    f"ulysses({self.sp_ulysses_size}) * ring({self.sp_ring_size}) " f"!= sp({self.sp_size})"
+                    f"ulysses({self.sp_ulysses_size}) * ring({self.sp_ring_size}) != sp({self.sp_size})"
                 )
 
 

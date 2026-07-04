@@ -163,9 +163,9 @@ class TestWanImagePreprocess:
         vae_scale = manager.pipe.vae_scale_factor_spatial
         patch_h = manager.pipe.transformer.config.patch_size[1]
         patch_w = manager.pipe.transformer.config.patch_size[2]
-        assert (
-            new_height % (vae_scale * patch_h) == 0
-        ), f"Height {new_height} should be divisible by {vae_scale * patch_h}"
+        assert new_height % (vae_scale * patch_h) == 0, (
+            f"Height {new_height} should be divisible by {vae_scale * patch_h}"
+        )
         assert new_width % (vae_scale * patch_w) == 0, f"Width {new_width} should be divisible by {vae_scale * patch_w}"
 
 

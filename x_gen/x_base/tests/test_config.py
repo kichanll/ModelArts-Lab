@@ -285,9 +285,9 @@ class TestQuantLayerConfig:
         config = QuantLayerConfig()
 
         expected_blocks = ["blocks"]
-        assert (
-            config.w4a4_block_patterns == expected_blocks
-        ), f"Expected {expected_blocks}, got {config.w4a4_block_patterns}"
+        assert config.w4a4_block_patterns == expected_blocks, (
+            f"Expected {expected_blocks}, got {config.w4a4_block_patterns}"
+        )
 
     def test_should_use_w4a4_with_blocks_and_proj(self):
         """Test should_use_w4a4 returns True for layers matching both patterns."""

@@ -436,9 +436,9 @@ class TestTensorSimilarity:
 
         result = are_two_tensors_similar(t1, t2, threshold=threshold)
 
-        assert (
-            result == expected_similar
-        ), f"diff={diff_percent}, threshold={threshold}: expected {expected_similar}, got {result}"
+        assert result == expected_similar, (
+            f"diff={diff_percent}, threshold={threshold}: expected {expected_similar}, got {result}"
+        )
 
     @pytest.mark.requires_torch
     @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")

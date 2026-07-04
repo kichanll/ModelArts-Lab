@@ -21,7 +21,7 @@ class PadNotSetError(SequenceParallelError):
     """
 
     def __init__(self, name: str):
-        super().__init__(f"Padding '{name}' has not been set. " f"Call PadManager.set() or set_pad() first.")
+        super().__init__(f"Padding '{name}' has not been set. Call PadManager.set() or set_pad() first.")
         self.name = name
 
 

@@ -568,9 +568,7 @@ def run_qwenimage_pipeline_core(
     noise_postprocess = None
     if config.needs_edit_preprocess:
         image_latents = extra_data.get("image_latents")
-        latent_preprocess = lambda lats: (
-            torch.cat([lats, image_latents], dim=1) if image_latents is not None else lats
-        )
+        latent_preprocess = lambda lats: torch.cat([lats, image_latents], dim=1) if image_latents is not None else lats
         noise_postprocess = lambda pred, lats: pred[:, : lats.size(1)]
 
     # 11. Run denoising loop

@@ -176,9 +176,9 @@ class TestTeacacheInitRealBehavior:
         teacache_init(mock_pipe, mock_args)
 
         actual_thresh = mock_pipe.transformer.__class__.teacache_thresh
-        assert (
-            actual_thresh == expected_thresh
-        ), f"Expected threshold {expected_thresh} for {task_type}, got {actual_thresh}"
+        assert actual_thresh == expected_thresh, (
+            f"Expected threshold {expected_thresh} for {task_type}, got {actual_thresh}"
+        )
 
     def test_teacache_init_sets_step_counter(self, mock_pipe, mock_args):
         """Test that step counter is properly initialized."""

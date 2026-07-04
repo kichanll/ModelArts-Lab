@@ -273,9 +273,9 @@ class TestInferInfoEdgeCases:
         info = InferInfo()
         info.update_info(args)
 
-        assert (
-            info.frames == expected_frames
-        ), f"Input {input_frames} should adjust to {expected_frames}, got {info.frames}"
+        assert info.frames == expected_frames, (
+            f"Input {input_frames} should adjust to {expected_frames}, got {info.frames}"
+        )
 
     def test_hunyuan_frames_always_satisfy_constraint(self):
         """Test that HunyuanVideo frames always satisfy 4*k+1 after adjustment."""
