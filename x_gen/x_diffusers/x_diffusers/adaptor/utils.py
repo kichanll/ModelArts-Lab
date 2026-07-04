@@ -3,6 +3,7 @@ import os
 import torch
 import torch.distributed as dist
 import torch_npu
+from torch_npu.contrib import transfer_to_npu  # noqa: F401
 from x_base.cfg_parallelism.utils import init_CFG_Parallel
 
 
