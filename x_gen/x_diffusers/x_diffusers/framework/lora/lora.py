@@ -1,19 +1,18 @@
-from typing import Any, Optional
+import abc
+from typing import Any
 
 import torch
-from peft.tuners.lora.model import LoraModel
-from peft.tuners.tuners_utils import BaseTunerLayer
+from diffusers.loaders.peft import _SET_ADAPTER_SCALE_FN_MAPPING
 from peft.tuners.lora.aqlm import dispatch_aqlm
 from peft.tuners.lora.awq import dispatch_awq
 from peft.tuners.lora.eetq import dispatch_eetq
 from peft.tuners.lora.gptq import dispatch_gptq
 from peft.tuners.lora.hqq import dispatch_hqq
-from peft.tuners.lora.layer import Conv2d, LoraLayer, dispatch_default
+from peft.tuners.lora.layer import LoraLayer, dispatch_default
+from peft.tuners.lora.model import LoraModel
 from peft.tuners.lora.torchao import dispatch_torchao
 from peft.tuners.lora.tp_layer import dispatch_megatron
-from diffusers.loaders.peft import _SET_ADAPTER_SCALE_FN_MAPPING
-
-import abc
+from peft.tuners.tuners_utils import BaseTunerLayer
 from x_base import WeightQuantLinearModule
 
 
@@ -22,22 +21,23 @@ class _CombinedMeta(abc.ABCMeta, type):
     兼容元类，同时满足 abc.ABCMeta 和 type 的要求。
     用于解决 LoraWeightQuantLinearModule 同时继承 torch.nn.Module 和 LoraLayer 的元类冲突。
     """
+
     pass
 
 
 class LoraWeightQuantLinearModule(torch.nn.Module, LoraLayer, metaclass=_CombinedMeta):
     def __init__(
-            self,
-            base_layer,
-            adapter_name,
-            r: int = 0,
-            lora_alpha: int = 1,
-            lora_dropout: float = 0.0,
-            init_lora_weights: bool = True,
-            use_rslora: bool = False,
-            use_dora: bool = False,
-            lora_bias: bool = False,
-            **kwargs,
+        self,
+        base_layer,
+        adapter_name,
+        r: int = 0,
+        lora_alpha: int = 1,
+        lora_dropout: float = 0.0,
+        init_lora_weights: bool = True,
+        use_rslora: bool = False,
+        use_dora: bool = False,
+        lora_bias: bool = False,
+        **kwargs,
     ):
         if use_dora:
             raise ValueError(f"{self.__class__.__name__} does not support DoRA yet, please set it to False")
@@ -68,7 +68,7 @@ class LoraWeightQuantLinearModule(torch.nn.Module, LoraLayer, metaclass=_Combine
             return result
 
         for active_adapter in self.active_adapters:
-            if active_adapter not in self.lora_A.keys():
+            if active_adapter not in self.lora_A.keys():  # noqa: SIM118
                 continue
             lora_A = self.lora_A[active_adapter]
             lora_B = self.lora_B[active_adapter]
@@ -93,10 +93,10 @@ class LoraWeightQuantLinearModule(torch.nn.Module, LoraLayer, metaclass=_Combine
 
 
 def dispatch_wql(
-        target: torch.nn.Module,
-        adapter_name: str,
-        **kwargs: Any,
-) -> Optional[torch.nn.Module]:
+    target: torch.nn.Module,
+    adapter_name: str,
+    **kwargs: Any,
+) -> torch.nn.Module | None:
     new_module = None
 
     if isinstance(target, BaseTunerLayer):

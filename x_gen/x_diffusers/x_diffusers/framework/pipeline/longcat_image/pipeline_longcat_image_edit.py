@@ -9,20 +9,17 @@ from typing import Any
 import PIL
 import torch
 import torch.distributed as dist
-
 from diffusers import LongCatImageEditPipeline
 from diffusers.utils import logging
 
-from .base_longcat_image import BaseLongCatImagePipelineMixin
 from ..registry import register_hf_pipeline_class
+from .base_longcat_image import BaseLongCatImagePipelineMixin
 
 logger = logging.get_logger(__name__)
 
 
 @register_hf_pipeline_class("LongCatImageEditPipeline")
-class LongCatImageEditPipeline(
-    BaseLongCatImagePipelineMixin, LongCatImageEditPipeline
-):
+class LongCatImageEditPipeline(BaseLongCatImagePipelineMixin, LongCatImageEditPipeline):
     """LongCatImage Edit Pipeline 扩展类
 
     继承自 LongCatImageEditPipeline，混入 BaseLongCatImagePipelineMixin
@@ -54,7 +51,9 @@ class LongCatImageEditPipeline(
 
         # ========== 2. 输入校验 ==========
         self.check_inputs(
-            prompt, calculated_height, calculated_width,
+            prompt,
+            calculated_height,
+            calculated_width,
             negative_prompt=negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
@@ -89,10 +88,13 @@ class LongCatImageEditPipeline(
             image,
             batch_size * num_images_per_prompt,
             16,  # num_channels_latents
-            calculated_height, calculated_width,
+            calculated_height,
+            calculated_width,
             prompt_embeds.dtype,
             prompt_embeds.shape[1],
-            device, generator, latents,
+            device,
+            generator,
+            latents,
         )
         image_seq_len = latents.shape[1]
 
@@ -159,9 +161,7 @@ class LongCatImageEditPipeline(
             return image, None
 
         image = self.image_processor.resize(image, calculated_height, calculated_width)
-        prompt_image = self.image_processor.resize(
-            image, calculated_height // 2, calculated_width // 2
-        )
+        prompt_image = self.image_processor.resize(image, calculated_height // 2, calculated_width // 2)
         image = self.image_processor.preprocess(image, calculated_height, calculated_width)
         return image, prompt_image
 

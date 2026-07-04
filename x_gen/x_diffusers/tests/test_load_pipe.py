@@ -3,9 +3,10 @@ Unit tests for load_pipe.py functionality.
 
 Tests the pipeline loading, model validation, and ability configuration.
 """
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
+from unittest.mock import patch
+
+import pytest
 
 # ============================================================
 # Test data constants
@@ -187,7 +188,7 @@ class TestOperatorAbility:
         mock_args.matmul_a8w8 = False
         mock_args.matmul_a4w4 = False
 
-        with patch('x_diffusers.adaptor.load_pipe.attention_manager') as mock_attention:
+        with patch("x_diffusers.adaptor.load_pipe.attention_manager") as mock_attention:
             operator_ability(mock_pipe, mock_args)
             mock_attention.enable_sage_attention.assert_called_once()
 
@@ -211,7 +212,7 @@ class TestOperatorAbility:
         mock_args.matmul_a4w4 = False
         mock_args.conv3d_w8a8 = False
 
-        with patch('x_diffusers.adaptor.load_pipe.rope_manager') as mock_rope:
+        with patch("x_diffusers.adaptor.load_pipe.rope_manager") as mock_rope:
             operator_ability(mock_pipe, mock_args)
             mock_rope.enable_rope_fused.assert_called_once()
 
@@ -293,9 +294,7 @@ class TestUpdateLora:
 
         lora_path_list = ["lora1.safetensors"]
 
-        update_lora(
-            mock_pipe, mock_args.model, None, lora_path_list, fuse_lora=True
-        )
+        update_lora(mock_pipe, mock_args.model, None, lora_path_list, fuse_lora=True)
 
         mock_pipe.fuse_lora.assert_called_once()
 
@@ -310,7 +309,7 @@ class TestPipeToDevice:
         mock_args.inf_vram_blocks_num = 4
         mock_args.save_memory = False
 
-        with patch('x_diffusers.adaptor.load_pipe.transformer_vram') as mock_transformer_vram:
+        with patch("x_diffusers.adaptor.load_pipe.transformer_vram") as mock_transformer_vram:
             mock_transformer_vram.return_value = mock_pipe.transformer
             result = pipe_to_device(mock_pipe, mock_args)
             assert result is not None
@@ -321,7 +320,7 @@ class TestPipeToDevice:
 
         mock_args.inf_vram_blocks_num = 0
 
-        result = pipe_to_device(mock_pipe, mock_args)
+        result = pipe_to_device(mock_pipe, mock_args)  # noqa: F841
 
         mock_pipe.to.assert_called_with("npu")
 
@@ -342,7 +341,7 @@ class TestModelSpecificLogic:
         for model in wan22_models:
             mock_args.model = model
             expected_guidance_scales = (3.0, 4.0) if "T2V" in model else (3.5, 3.5)
-            assert len(expected_guidance_scales) == 2, f"Wan2.2 models should have dual guidance scale"
+            assert len(expected_guidance_scales) == 2, "Wan2.2 models should have dual guidance scale"
 
     def test_vace_model_task_validation(self, mock_args):
         """Test VACE model task type validation."""

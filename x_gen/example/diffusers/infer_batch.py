@@ -1,4 +1,4 @@
-from ascendx_video.adaptor import init_env, InferenceManager, parse_args
+from ascendx_video.adaptor import InferenceManager, init_env, parse_args
 
 if __name__ == "__main__":
     args = parse_args()

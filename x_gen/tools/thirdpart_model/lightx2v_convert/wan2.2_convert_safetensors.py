@@ -1,10 +1,12 @@
 # 该文件把wan2.2 dit权重 从非diffusers转为diffusers版本
 
+import argparse
+from pathlib import Path
+
 import safetensors
 from safetensors.torch import save_file
-from pathlib import Path
-import argparse
 from tqdm import tqdm
+
 
 def rename_safetensors_weights(input_path, output_path, train_type):
     """
@@ -25,7 +27,7 @@ def rename_safetensors_weights(input_path, output_path, train_type):
 
     # 3. 读取原 Safetensors 文件
     with safetensors.safe_open(input_path, framework="pt", device="cpu") as f:
-        original_tensors = {k: f.get_tensor(k) for k in f.keys()}
+        original_tensors = {k: f.get_tensor(k) for k in f.keys()}  # noqa: SIM118
         original_metadata = f.metadata() or {}
     tensor_total = len(original_tensors)
     # 打印合并任务信息
@@ -34,13 +36,13 @@ def rename_safetensors_weights(input_path, output_path, train_type):
 
     # 4. 批量重命名张量名称
     renamed_tensors = {}
-    if train_type == 'lora':
+    if train_type == "lora":
         for old_name, tensor_data in tqdm(original_tensors.items(), desc="批量重命名张量名称", unit="tensor"):
             temp_name = old_name.replace("default.", "")
             new_name = f"diffusion_model.{temp_name}"
             renamed_tensors[new_name] = tensor_data
 
-    elif train_type == 'sft':
+    elif train_type == "sft":
         for old_name, tensor_data in tqdm(original_tensors.items(), desc="批量重命名张量名称", unit="tensor"):
             new_name = old_name
             new_name = new_name.replace("head.modulation", "scale_shift_table")
@@ -64,14 +66,9 @@ def rename_safetensors_weights(input_path, output_path, train_type):
             # 保存重命名后的张量
             renamed_tensors[new_name] = tensor_data
 
-
     # 5. 保存重命名后的 Safetensors 文件
     print(f"目标权重保存开始: {output_path}")
-    save_file(
-        tensors=renamed_tensors,
-        filename=str(output_file),
-        metadata=original_metadata
-    )
+    save_file(tensors=renamed_tensors, filename=str(output_file), metadata=original_metadata)
     print(f"目标权重保存结束: {output_path}")
 
     # 6. 严格验证新文件有效性（校验可读取性+张量数量一致性，避免文件损坏）
@@ -91,9 +88,10 @@ def rename_safetensors_weights(input_path, output_path, train_type):
         verify_error = "无"
 
     # 7. 打印最终转换结果（清晰直观，便于核对）
-    print(f"""==================== 目标权重转换完成 ====================""")
+    print("""==================== 目标权重转换完成 ====================""")
     if not verify_ok:
         raise RuntimeError(f"文件验证失败，生成的文件可能损坏：{verify_error}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Safetensors张量名称重命名工具")
@@ -104,7 +102,6 @@ def main():
 
     rename_safetensors_weights(args.input, args.output, args.type)
 
+
 if __name__ == "__main__":
     main()
-
-

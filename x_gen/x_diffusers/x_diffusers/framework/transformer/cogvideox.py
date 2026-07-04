@@ -1,26 +1,31 @@
 from functools import partial
-from typing import Optional, Tuple, Union, Dict, Any
+from typing import Any
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch_npu
-from torch_npu.contrib import transfer_to_npu
-from diffusers.models.attention import FeedForward
-from diffusers.models.transformers import cogvideox_transformer_3d
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.loaders import PeftAdapterMixin
-from diffusers.utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers
-from diffusers.utils.torch_utils import maybe_allow_in_graph
+from diffusers.models.attention import FeedForward
 from diffusers.models.attention_processor import Attention, AttentionProcessor, FusedCogVideoXAttnProcessor2_0
 from diffusers.models.cache_utils import CacheMixin
 from diffusers.models.embeddings import CogVideoXPatchEmbed, TimestepEmbedding, Timesteps
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.normalization import AdaLayerNorm, CogVideoXLayerNormZero
-
-from x_base import gather_sequence, get_pad, set_pad, split_sequence, \
-    ParallelManager, batch_func, all_to_all_before_attn, all_to_all_after_attn
+from diffusers.models.transformers import cogvideox_transformer_3d
+from diffusers.utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers
+from diffusers.utils.torch_utils import maybe_allow_in_graph
+from x_base import (
+    ParallelManager,
+    all_to_all_after_attn,
+    all_to_all_before_attn,
+    batch_func,
+    gather_sequence,
+    get_pad,
+    set_pad,
+    split_sequence,
+)
 
 
 class AscendCogVideoXAttnProcessor2_0:
@@ -33,12 +38,13 @@ class AscendCogVideoXAttnProcessor2_0:
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("CogVideoXAttnProcessor requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
 
-    def apply_rotary_emb(self,
-                         x: torch.Tensor,
-                         freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor]],
-                         use_real: bool = True,
-                         use_real_unbind_dim: int = -1,
-                         ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def apply_rotary_emb(
+        self,
+        x: torch.Tensor,
+        freqs_cis: torch.Tensor | tuple[torch.Tensor],
+        use_real: bool = True,
+        use_real_unbind_dim: int = -1,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply rotary embeddings to input tensors using the given frequency tensor. This function applies rotary embeddings
         to the given query or key 'x' tensors using the provided frequency tensor 'freqs_cis'. The input tensors are
@@ -52,7 +58,7 @@ class AscendCogVideoXAttnProcessor2_0:
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
-        """
+        """  # noqa: E501
         if use_real:
             cos, sin = freqs_cis  # [S, D]
             cos = cos[None, None]
@@ -81,12 +87,12 @@ class AscendCogVideoXAttnProcessor2_0:
             return x_out.type_as(x)
 
     def __call__(
-            self,
-            attn: Attention,
-            hidden_states: torch.Tensor,
-            encoder_hidden_states: torch.Tensor,
-            attention_mask: Optional[torch.Tensor] = None,
-            image_rotary_emb: Optional[torch.Tensor] = None,
+        self,
+        attn: Attention,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        image_rotary_emb: torch.Tensor | None = None,
     ) -> torch.Tensor:
         text_seq_length = encoder_hidden_states.size(1)
 
@@ -109,7 +115,8 @@ class AscendCogVideoXAttnProcessor2_0:
         if attn.parallel_manager.sp_size > 1:
             if attn.heads % attn.parallel_manager.sp_size != 0:
                 raise ValueError(
-                    f"Number of heads {attn.heads} must be divisible by sequence parallel size {attn.parallel_manager.sp_size}")
+                    f"Number of heads {attn.heads} must be divisible by sequence parallel size {attn.parallel_manager.sp_size}"  # noqa: E501
+                )
 
             attn_heads = attn.heads // attn.parallel_manager.sp_size
             query, key, value = map(
@@ -161,8 +168,9 @@ class AscendCogVideoXAttnProcessor2_0:
         )
 
         if attn.parallel_manager.sp_size > 1:
-            hidden_states = all_to_all_after_attn(hidden_states, attn.parallel_manager.sp_group,
-                                                  scatter_dim=1, gather_dim=2)
+            hidden_states = all_to_all_after_attn(
+                hidden_states, attn.parallel_manager.sp_group, scatter_dim=1, gather_dim=2
+            )
             encoder_hidden_states = gather_sequence(encoder_hidden_states, attn.parallel_manager.sp_group, dim=2)
 
         # linear proj
@@ -212,21 +220,21 @@ class AscendCogVideoXBlock(nn.Module):
     """
 
     def __init__(
-            self,
-            dim: int,
-            num_attention_heads: int,
-            attention_head_dim: int,
-            time_embed_dim: int,
-            dropout: float = 0.0,
-            activation_fn: str = "gelu-approximate",
-            attention_bias: bool = False,
-            qk_norm: bool = True,
-            norm_elementwise_affine: bool = True,
-            norm_eps: float = 1e-5,
-            final_dropout: bool = True,
-            ff_inner_dim: Optional[int] = None,
-            ff_bias: bool = True,
-            attention_out_bias: bool = True,
+        self,
+        dim: int,
+        num_attention_heads: int,
+        attention_head_dim: int,
+        time_embed_dim: int,
+        dropout: float = 0.0,
+        activation_fn: str = "gelu-approximate",
+        attention_bias: bool = False,
+        qk_norm: bool = True,
+        norm_elementwise_affine: bool = True,
+        norm_eps: float = 1e-5,
+        final_dropout: bool = True,
+        ff_inner_dim: int | None = None,
+        ff_bias: bool = True,
+        attention_out_bias: bool = True,
     ):
         super().__init__()
 
@@ -259,12 +267,12 @@ class AscendCogVideoXBlock(nn.Module):
         )
 
     def forward(
-            self,
-            hidden_states: torch.Tensor,
-            encoder_hidden_states: torch.Tensor,
-            temb: torch.Tensor,
-            image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-            attention_kwargs: Optional[Dict[str, Any]] = None,
+        self,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: torch.Tensor,
+        temb: torch.Tensor,
+        image_rotary_emb: tuple[torch.Tensor, torch.Tensor] | None = None,
+        attention_kwargs: dict[str, Any] | None = None,
     ) -> torch.Tensor:
         text_seq_length = encoder_hidden_states.size(1)
         attention_kwargs = attention_kwargs or {}
@@ -307,35 +315,35 @@ class AscendCogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixi
 
     @register_to_config
     def __init__(
-            self,
-            num_attention_heads: int = 30,
-            attention_head_dim: int = 64,
-            in_channels: int = 16,
-            out_channels: Optional[int] = 16,
-            flip_sin_to_cos: bool = True,
-            freq_shift: int = 0,
-            time_embed_dim: int = 512,
-            ofs_embed_dim: Optional[int] = None,
-            text_embed_dim: int = 4096,
-            num_layers: int = 30,
-            dropout: float = 0.0,
-            attention_bias: bool = True,
-            sample_width: int = 90,
-            sample_height: int = 60,
-            sample_frames: int = 49,
-            patch_size: int = 2,
-            patch_size_t: Optional[int] = None,
-            temporal_compression_ratio: int = 4,
-            max_text_seq_length: int = 226,
-            activation_fn: str = "gelu-approximate",
-            timestep_activation_fn: str = "silu",
-            norm_elementwise_affine: bool = True,
-            norm_eps: float = 1e-5,
-            spatial_interpolation_scale: float = 1.875,
-            temporal_interpolation_scale: float = 1.0,
-            use_rotary_positional_embeddings: bool = False,
-            use_learned_positional_embeddings: bool = False,
-            patch_bias: bool = True,
+        self,
+        num_attention_heads: int = 30,
+        attention_head_dim: int = 64,
+        in_channels: int = 16,
+        out_channels: int | None = 16,
+        flip_sin_to_cos: bool = True,
+        freq_shift: int = 0,
+        time_embed_dim: int = 512,
+        ofs_embed_dim: int | None = None,
+        text_embed_dim: int = 4096,
+        num_layers: int = 30,
+        dropout: float = 0.0,
+        attention_bias: bool = True,
+        sample_width: int = 90,
+        sample_height: int = 60,
+        sample_frames: int = 49,
+        patch_size: int = 2,
+        patch_size_t: int | None = None,
+        temporal_compression_ratio: int = 4,
+        max_text_seq_length: int = 226,
+        activation_fn: str = "gelu-approximate",
+        timestep_activation_fn: str = "silu",
+        norm_elementwise_affine: bool = True,
+        norm_eps: float = 1e-5,
+        spatial_interpolation_scale: float = 1.875,
+        temporal_interpolation_scale: float = 1.0,
+        use_rotary_positional_embeddings: bool = False,
+        use_learned_positional_embeddings: bool = False,
+        patch_bias: bool = True,
     ):
         super().__init__()
         inner_dim = num_attention_heads * attention_head_dim
@@ -441,7 +449,7 @@ class AscendCogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixi
 
     @property
     # Copied from diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.attn_processors
-    def attn_processors(self) -> Dict[str, AttentionProcessor]:
+    def attn_processors(self) -> dict[str, AttentionProcessor]:
         r"""
         Returns:
             `dict` of attention processors: A dictionary containing all attention processors used in the model with
@@ -450,7 +458,7 @@ class AscendCogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixi
         # set recursively
         processors = {}
 
-        def fn_recursive_add_processors(name: str, module: torch.nn.Module, processors: Dict[str, AttentionProcessor]):
+        def fn_recursive_add_processors(name: str, module: torch.nn.Module, processors: dict[str, AttentionProcessor]):
             if hasattr(module, "get_processor"):
                 processors[f"{name}.processor"] = module.get_processor()
 
@@ -465,7 +473,7 @@ class AscendCogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixi
         return processors
 
     # Copied from diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.set_attn_processor
-    def set_attn_processor(self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]]):
+    def set_attn_processor(self, processor: AttentionProcessor | dict[str, AttentionProcessor]):
         r"""
         Sets the attention processor to use to compute attention.
 
@@ -499,7 +507,7 @@ class AscendCogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixi
         for name, module in self.named_children():
             fn_recursive_attn_processor(name, module, processor)
 
-    # Copied from diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.fuse_qkv_projections with FusedAttnProcessor2_0->FusedCogVideoXAttnProcessor2_0
+    # Copied from diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.fuse_qkv_projections with FusedAttnProcessor2_0->FusedCogVideoXAttnProcessor2_0  # noqa: E501
     def fuse_qkv_projections(self):
         """
         Enables fused QKV projections. For self-attention modules, all projection matrices (i.e., query, key, value)
@@ -540,15 +548,15 @@ class AscendCogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixi
             self.set_attn_processor(self.original_attn_processors)
 
     def forward(
-            self,
-            hidden_states: torch.Tensor,
-            encoder_hidden_states: torch.Tensor,
-            timestep: Union[int, float, torch.LongTensor],
-            timestep_cond: Optional[torch.Tensor] = None,
-            ofs: Optional[Union[int, float, torch.LongTensor]] = None,
-            image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-            attention_kwargs: Optional[Dict[str, Any]] = None,
-            return_dict: bool = True,
+        self,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: torch.Tensor,
+        timestep: int | float | torch.LongTensor,
+        timestep_cond: torch.Tensor | None = None,
+        ofs: int | float | torch.LongTensor | None = None,
+        image_rotary_emb: tuple[torch.Tensor, torch.Tensor] | None = None,
+        attention_kwargs: dict[str, Any] | None = None,
+        return_dict: bool = True,
     ):
         if attention_kwargs is not None:
             attention_kwargs = attention_kwargs.copy()
@@ -561,9 +569,7 @@ class AscendCogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixi
             scale_lora_layers(self, lora_scale)
         else:
             if attention_kwargs is not None and attention_kwargs.get("scale", None) is not None:
-                print(
-                    "Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
-                )
+                print("Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective.")
 
         if self.parallel_manager.cp_size > 1:
             (

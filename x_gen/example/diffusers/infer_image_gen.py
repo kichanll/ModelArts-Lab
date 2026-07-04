@@ -1,5 +1,4 @@
-from x_diffusers import init_cfg_env, ImageInferenceManager, parse_args
-
+from x_diffusers import ImageInferenceManager, init_cfg_env, parse_args
 
 if __name__ == "__main__":
     args = parse_args()

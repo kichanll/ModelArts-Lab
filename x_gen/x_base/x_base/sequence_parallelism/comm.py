@@ -23,9 +23,10 @@ Sequence Parallelism - Communication Module
 
 所有 API 与原 comm.py 保持兼容。
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import torch
 import torch.distributed as dist
@@ -37,10 +38,10 @@ from torch.distributed import ProcessGroup, Work
 from .errors import IncompatibleDimensionError
 from .padding import get_pad_manager
 
-
 # =============================================================================
 # AllGather - 沿维度 0 收集所有进程的张量
 # =============================================================================
+
 
 class AllGather(torch.autograd.Function):
     """AllGather 通信原语
@@ -64,9 +65,9 @@ class AllGather(torch.autograd.Function):
     def forward(
         ctx: Any,
         tensor: Tensor,
-        group: Optional[ProcessGroup] = None,
+        group: ProcessGroup | None = None,
         overlap: bool = False,
-    ) -> Tuple[Tensor, Optional[Work]]:
+    ) -> tuple[Tensor, Work | None]:
         """AllGather 前向传播
 
         Args:
@@ -105,17 +106,16 @@ class AllGather(torch.autograd.Function):
             return output, None
 
     @staticmethod
-    def backward(ctx: Any, *grad_outputs) -> Tuple[Tensor, None, None]:
+    def backward(ctx: Any, *grad_outputs) -> tuple[Tensor, None, None]:
         """AllGather 反向传播 = ReduceScatter"""
-        grad_input = ReduceScatter.forward(
-            None, grad_outputs[0], ctx.comm_grp, False
-        )[0]
+        grad_input = ReduceScatter.forward(None, grad_outputs[0], ctx.comm_grp, False)[0]
         return grad_input, None, None
 
 
 # =============================================================================
 # ReduceScatter - 沿维度 0 分块求和并散射
 # =============================================================================
+
 
 class ReduceScatter(torch.autograd.Function):
     """ReduceScatter 通信原语
@@ -136,7 +136,7 @@ class ReduceScatter(torch.autograd.Function):
         tensor: Tensor,
         group: ProcessGroup,
         overlap: bool = False,
-    ) -> Tuple[Tensor, Optional[Work]]:
+    ) -> tuple[Tensor, Work | None]:
         """ReduceScatter 前向传播
 
         Args:
@@ -176,17 +176,16 @@ class ReduceScatter(torch.autograd.Function):
             return output, None
 
     @staticmethod
-    def backward(ctx: Any, *grad_outputs) -> Tuple[Tensor, None, None]:
+    def backward(ctx: Any, *grad_outputs) -> tuple[Tensor, None, None]:
         """ReduceScatter 反向传播 = AllGather"""
-        grad_input = AllGather.forward(
-            None, grad_outputs[0], ctx.comm_grp, False
-        )[0]
+        grad_input = AllGather.forward(None, grad_outputs[0], ctx.comm_grp, False)[0]
         return grad_input, None, None
 
 
 # =============================================================================
 # AllToAll - 通用 AllToAll 操作
 # =============================================================================
+
 
 class AllToAllAutograd(torch.autograd.Function):
     """AllToAll 通信原语
@@ -199,13 +198,7 @@ class AllToAllAutograd(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(
-        ctx: Any,
-        tensor: Tensor,
-        group: ProcessGroup,
-        scatter_dim: int,
-        gather_dim: int
-    ) -> Tensor:
+    def forward(ctx: Any, tensor: Tensor, group: ProcessGroup, scatter_dim: int, gather_dim: int) -> Tensor:
         """AllToAll 前向传播
 
         Args:
@@ -228,10 +221,7 @@ class AllToAllAutograd(torch.autograd.Function):
             return tensor
 
         # 分块
-        input_list = [
-            t.contiguous()
-            for t in torch.tensor_split(tensor, world_size, scatter_dim)
-        ]
+        input_list = [t.contiguous() for t in torch.tensor_split(tensor, world_size, scatter_dim)]
         output_list = [torch.empty_like(input_list[0]) for _ in range(world_size)]
 
         # AllToAll
@@ -241,13 +231,13 @@ class AllToAllAutograd(torch.autograd.Function):
         return torch.cat(output_list, dim=gather_dim).contiguous()
 
     @staticmethod
-    def backward(ctx: Any, *grad_outputs) -> Tuple[Tensor, None, None, None]:
+    def backward(ctx: Any, *grad_outputs) -> tuple[Tensor, None, None, None]:
         """AllToAll 反向传播"""
         grad_input = AllToAllAutograd.apply(
             grad_outputs[0],
             ctx.process_group,
             ctx.gather_dim,  # 注意：交换 scatter 和 gather
-            ctx.scatter_dim
+            ctx.scatter_dim,
         )
         return grad_input, None, None, None
 
@@ -255,6 +245,7 @@ class AllToAllAutograd(torch.autograd.Function):
 # =============================================================================
 # AllToAll 4D - 序列并行专用
 # =============================================================================
+
 
 class AllToAll4DAutograd(torch.autograd.Function):
     """4D AllToAll 通信原语 (序列并行专用)
@@ -288,7 +279,7 @@ class AllToAll4DAutograd(torch.autograd.Function):
         return _all_to_all_4d_impl(tensor, scatter_dim, gather_dim, group, use_sync)
 
     @staticmethod
-    def backward(ctx: Any, *grad_output: Tensor) -> Tuple[None, Tensor, None, None, None]:
+    def backward(ctx: Any, *grad_output: Tensor) -> tuple[None, Tensor, None, None, None]:
         """4D AllToAll 反向传播"""
         return (
             None,
@@ -297,7 +288,7 @@ class AllToAll4DAutograd(torch.autograd.Function):
                 grad_output[0],
                 ctx.gather_dim,  # 交换维度
                 ctx.scatter_dim,
-                ctx.use_sync
+                ctx.use_sync,
             ),
             None,
             None,
@@ -306,11 +297,7 @@ class AllToAll4DAutograd(torch.autograd.Function):
 
 
 def _all_to_all_4d_impl(
-    tensor: Tensor,
-    scatter_dim: int,
-    gather_dim: int,
-    group: ProcessGroup,
-    use_sync: bool
+    tensor: Tensor, scatter_dim: int, gather_dim: int, group: ProcessGroup, use_sync: bool
 ) -> Tensor:
     """4D AllToAll 实现细节"""
     world_size = dist.get_world_size(group)
@@ -324,11 +311,7 @@ def _all_to_all_4d_impl(
         seqlen = shard_seqlen * world_size
         shard_h = h // world_size
 
-        input_t = (
-            tensor.reshape(bs, shard_seqlen, world_size, shard_h)
-            .transpose(0, 2)
-            .contiguous()
-        )
+        input_t = tensor.reshape(bs, shard_seqlen, world_size, shard_h).transpose(0, 2).contiguous()
 
         output = torch.empty_like(input_t)
         dist.all_to_all_single(output, input_t, group=group)
@@ -375,6 +358,7 @@ def _all_to_all_4d_impl(
 # AllGather Overlapped - 通信计算重叠 (两卡专用)
 # =============================================================================
 
+
 class AllGatherOverlapped(torch.autograd.Function):
     """AllGather 通信计算重叠 (两卡场景专用)
 
@@ -382,9 +366,7 @@ class AllGatherOverlapped(torch.autograd.Function):
     仅适用于 world_size=2 的场景。
 
     Example:
-        >>> qkv = AllGatherOverlapped.apply(
-        ...     inputs, weight, bias, sp_rank, sp_size, group
-        ... )
+        >>> qkv = AllGatherOverlapped.apply(inputs, weight, bias, sp_rank, sp_size, group)
     """
 
     @staticmethod
@@ -395,7 +377,7 @@ class AllGatherOverlapped(torch.autograd.Function):
         bias: Tensor,
         sp_rank: int,
         sp_size: int,
-        group: Optional[ProcessGroup] = None,
+        group: ProcessGroup | None = None,
     ) -> Tensor:
         """通信计算重叠 AllGather
 
@@ -438,7 +420,7 @@ class AllGatherOverlapped(torch.autograd.Function):
         return qkv
 
     @staticmethod
-    def backward(ctx: Any, *grad_outputs) -> Tuple[Tensor, Tensor, Tensor, None, None, None]:
+    def backward(ctx: Any, *grad_outputs) -> tuple[Tensor, Tensor, Tensor, None, None, None]:
         """反向传播"""
         from torch.distributed._functional_collectives import reduce_scatter_tensor
 
@@ -459,9 +441,7 @@ class AllGatherOverlapped(torch.autograd.Function):
 
         # 计算远程梯度
         remote_inputs_grad = torch.matmul(remote_qkv_grad, weight).squeeze(0)
-        weight_grad = torch.matmul(
-            remote_qkv_grad.transpose(-1, -2), remote_inputs
-        ).squeeze(0).sum(0)
+        weight_grad = torch.matmul(remote_qkv_grad.transpose(-1, -2), remote_inputs).squeeze(0).sum(0)
         bias_grad = remote_qkv_grad.squeeze(0).sum(0).sum(0)
 
         # 异步 ReduceScatter
@@ -474,9 +454,7 @@ class AllGatherOverlapped(torch.autograd.Function):
 
         # 计算本地梯度
         local_input_grad = torch.matmul(local_qkv_grad, weight).squeeze(0)
-        weight_grad += torch.matmul(
-            local_qkv_grad.transpose(-1, -2), inputs
-        ).squeeze(0).sum(0)
+        weight_grad += torch.matmul(local_qkv_grad.transpose(-1, -2), inputs).squeeze(0).sum(0)
         bias_grad += local_qkv_grad.squeeze(0).sum(0).sum(0)
 
         inputs_grad = remote_inputs_grad + local_input_grad
@@ -487,11 +465,8 @@ class AllGatherOverlapped(torch.autograd.Function):
 # 便捷函数
 # =============================================================================
 
-def all_gather(
-    tensor: Tensor,
-    group: Optional[ProcessGroup] = None,
-    overlap: bool = False
-) -> Tuple[Tensor, Optional[Work]]:
+
+def all_gather(tensor: Tensor, group: ProcessGroup | None = None, overlap: bool = False) -> tuple[Tensor, Work | None]:
     """AllGather 便捷函数
 
     Args:
@@ -505,11 +480,7 @@ def all_gather(
     return AllGather.apply(None, tensor, group, overlap)
 
 
-def reduce_scatter(
-    tensor: Tensor,
-    group: ProcessGroup,
-    overlap: bool = False
-) -> Tuple[Tensor, Optional[Work]]:
+def reduce_scatter(tensor: Tensor, group: ProcessGroup, overlap: bool = False) -> tuple[Tensor, Work | None]:
     """ReduceScatter 便捷函数
 
     Args:
@@ -523,12 +494,7 @@ def reduce_scatter(
     return ReduceScatter.apply(None, tensor, group, overlap)
 
 
-def all_to_all(
-    tensor: Tensor,
-    group: ProcessGroup,
-    scatter_dim: int = 2,
-    gather_dim: int = 1
-) -> Tensor:
+def all_to_all(tensor: Tensor, group: ProcessGroup, scatter_dim: int = 2, gather_dim: int = 1) -> Tensor:
     """AllToAll 便捷函数
 
     Args:
@@ -547,11 +513,8 @@ def all_to_all(
 # Tensor Padding
 # =============================================================================
 
-def pad_tensor(
-    tensor: Tensor,
-    dim: int,
-    pad: int
-) -> Tensor:
+
+def pad_tensor(tensor: Tensor, dim: int, pad: int) -> Tensor:
     """沿指定维度 padding 张量
 
     Args:
@@ -582,6 +545,7 @@ def pad_tensor(
 # Sequence Gather & Split (带 Autograd)
 # =============================================================================
 
+
 class _GatherForwardSplitBackward(torch.autograd.Function):
     """Gather 序列 (前向) / Split 序列 (反向)
 
@@ -594,14 +558,7 @@ class _GatherForwardSplitBackward(torch.autograd.Function):
         return tensor
 
     @staticmethod
-    def forward(
-        ctx,
-        tensor: Tensor,
-        process_group: ProcessGroup,
-        dim: int,
-        grad_scale: str,
-        pad: int
-    ) -> Tensor:
+    def forward(ctx, tensor: Tensor, process_group: ProcessGroup, dim: int, grad_scale: str, pad: int) -> Tensor:
         ctx.process_group = process_group
         ctx.dim = dim
         ctx.grad_scale = grad_scale
@@ -617,9 +574,7 @@ class _GatherForwardSplitBackward(torch.autograd.Function):
         elif ctx.grad_scale == "down":
             grad_output = grad_output / dist.get_world_size(ctx.process_group)
 
-        grad_input = _split_sequence_impl(
-            grad_output, ctx.process_group, ctx.dim, ctx.pad
-        )
+        grad_input = _split_sequence_impl(grad_output, ctx.process_group, ctx.dim, ctx.pad)
         return grad_input, None, None, None, None
 
 
@@ -635,14 +590,7 @@ class _SplitForwardGatherBackward(torch.autograd.Function):
         return tensor
 
     @staticmethod
-    def forward(
-        ctx,
-        tensor: Tensor,
-        process_group: ProcessGroup,
-        dim: int,
-        grad_scale: str,
-        pad: int
-    ) -> Tensor:
+    def forward(ctx, tensor: Tensor, process_group: ProcessGroup, dim: int, grad_scale: str, pad: int) -> Tensor:
         ctx.process_group = process_group
         ctx.dim = dim
         ctx.grad_scale = grad_scale
@@ -658,18 +606,11 @@ class _SplitForwardGatherBackward(torch.autograd.Function):
         elif ctx.grad_scale == "down":
             grad_output = grad_output / dist.get_world_size(ctx.process_group)
 
-        grad_input = _gather_sequence_impl(
-            grad_output, ctx.process_group, ctx.dim, ctx.pad
-        )
+        grad_input = _gather_sequence_impl(grad_output, ctx.process_group, ctx.dim, ctx.pad)
         return grad_input, None, None, None, None
 
 
-def _split_sequence_impl(
-    tensor: Tensor,
-    group: ProcessGroup,
-    dim: int,
-    pad: int
-) -> Tensor:
+def _split_sequence_impl(tensor: Tensor, group: ProcessGroup, dim: int, pad: int) -> Tensor:
     """Split 序列实现
 
     Args:
@@ -702,12 +643,7 @@ def _split_sequence_impl(
     return tensor_list[rank].contiguous()
 
 
-def _gather_sequence_impl(
-    tensor: Tensor,
-    group: ProcessGroup,
-    dim: int,
-    pad: int
-) -> Tensor:
+def _gather_sequence_impl(tensor: Tensor, group: ProcessGroup, dim: int, pad: int) -> Tensor:
     """Gather 序列实现
 
     Args:
@@ -740,11 +676,7 @@ def _gather_sequence_impl(
 
 
 def gather_sequence(
-    tensor: Tensor,
-    process_group: ProcessGroup,
-    dim: int,
-    grad_scale: str = "",
-    pad: int = 0
+    tensor: Tensor, process_group: ProcessGroup, dim: int, grad_scale: str = "", pad: int = 0
 ) -> Tensor:
     """收集序列分片
 
@@ -765,18 +697,10 @@ def gather_sequence(
         >>> full_seq = gather_sequence(local_tensor, sp_group, dim=1)
         >>> # full_seq shape=(bs, seqlen, hidden)
     """
-    return _GatherForwardSplitBackward.apply(
-        tensor, process_group, dim, grad_scale, pad
-    )
+    return _GatherForwardSplitBackward.apply(tensor, process_group, dim, grad_scale, pad)
 
 
-def split_sequence(
-    tensor: Tensor,
-    process_group: ProcessGroup,
-    dim: int,
-    grad_scale: str = "",
-    pad: int = 0
-) -> Tensor:
+def split_sequence(tensor: Tensor, process_group: ProcessGroup, dim: int, grad_scale: str = "", pad: int = 0) -> Tensor:
     """切分序列
 
     前向传播时 Split 切分到各进程，反向传播时 AllGather 收集梯度。
@@ -796,21 +720,20 @@ def split_sequence(
         >>> local_seq = split_sequence(full_tensor, sp_group, dim=1)
         >>> # local_seq shape=(bs, seqlen/P, hidden)
     """
-    return _SplitForwardGatherBackward.apply(
-        tensor, process_group, dim, grad_scale, pad
-    )
+    return _SplitForwardGatherBackward.apply(tensor, process_group, dim, grad_scale, pad)
 
 
 # =============================================================================
 # AllToAll 4D (序列并行专用)
 # =============================================================================
 
+
 def all_to_all_4d(
     tensor: Tensor,
     scatter_dim: int = 2,
     gather_dim: int = 1,
-    group: Optional[ProcessGroup] = None,
-    use_sync: bool = False
+    group: ProcessGroup | None = None,
+    use_sync: bool = False,
 ) -> Tensor:
     """4D AllToAll 操作 (序列并行专用)
 
@@ -850,11 +773,9 @@ def all_to_all_4d(
 # Attention 前后的 AllToAll (带 Padding)
 # =============================================================================
 
+
 def all_to_all_before_attn(
-    tensor: Tensor,
-    process_group: Optional[ProcessGroup] = None,
-    scatter_dim: int = 2,
-    gather_dim: int = 1
+    tensor: Tensor, process_group: ProcessGroup | None = None, scatter_dim: int = 2, gather_dim: int = 1
 ) -> Tensor:
     """Attention 前的 AllToAll
 
@@ -873,9 +794,7 @@ def all_to_all_before_attn(
     pad = get_pad_manager().get_or_default("pad", 0)
 
     # AllToAll
-    output = AllToAllAutograd.apply(
-        tensor, process_group, scatter_dim, gather_dim
-    )
+    output = AllToAllAutograd.apply(tensor, process_group, scatter_dim, gather_dim)
 
     # 去除 padding
     if pad > 0:
@@ -885,10 +804,7 @@ def all_to_all_before_attn(
 
 
 def all_to_all_after_attn(
-    tensor: Tensor,
-    process_group: Optional[ProcessGroup] = None,
-    scatter_dim: int = 1,
-    gather_dim: int = 2
+    tensor: Tensor, process_group: ProcessGroup | None = None, scatter_dim: int = 1, gather_dim: int = 2
 ) -> Tensor:
     """Attention 后的 AllToAll
 
@@ -911,14 +827,13 @@ def all_to_all_after_attn(
         tensor = pad_tensor(tensor, scatter_dim, pad)
 
     # AllToAll
-    return AllToAllAutograd.apply(
-        tensor, process_group, scatter_dim, gather_dim
-    )
+    return AllToAllAutograd.apply(tensor, process_group, scatter_dim, gather_dim)
 
 
 # =============================================================================
 # Batch Function Helper
 # =============================================================================
+
 
 def batch_func(func, *args):
     """对 batch_size=2 的张量应用函数

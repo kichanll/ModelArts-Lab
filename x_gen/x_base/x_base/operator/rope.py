@@ -1,12 +1,11 @@
 import torch
-import torch_npu
 from diffusers.utils import logging
 
 logger = logging.get_logger("attention")
 
 try:
-    import cann_ops
-    import ascend_cloud
+    import ascend_cloud  # noqa: F401
+    import cann_ops  # noqa: F401
 
     ASCEND_CLOUD_AVAILABLE = True
 except ImportError:
@@ -23,9 +22,9 @@ except ImportError:
 
 
 def apply_rotary_emb(
-        hidden_states: torch.Tensor,
-        cos: torch.Tensor,
-        sin: torch.Tensor,
+    hidden_states: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
 ):
     x = hidden_states.view(*hidden_states.shape[:-1], -1, 2)
     x1, x2 = x[..., 0], x[..., 1]
@@ -49,10 +48,10 @@ class RopeManager:
 
     @staticmethod
     def rope_flux(
-            query: torch.Tensor,
-            key: torch.Tensor,
-            cos: torch.Tensor,
-            sin: torch.Tensor,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
     ):
         query = query.contiguous()
         key = key.contiguous()
@@ -69,10 +68,10 @@ class RopeManager:
 
     @staticmethod
     def rope_base(
-            query: torch.Tensor,
-            key: torch.Tensor,
-            cos: torch.Tensor,
-            sin: torch.Tensor,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
     ):
         query = apply_rotary_emb(query, cos, sin)
         key = apply_rotary_emb(key, cos, sin)
@@ -80,21 +79,21 @@ class RopeManager:
 
     @staticmethod
     def rope_mindie(
-            query: torch.Tensor,
-            key: torch.Tensor,
-            cos: torch.Tensor,
-            sin: torch.Tensor,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
     ):
         query = rotary_position_embedding(query, cos, sin, rotated_mode="rotated_interleaved", fused=True)
         key = rotary_position_embedding(key, cos, sin, rotated_mode="rotated_interleaved", fused=True)
         return query, key
 
     def rope(
-            self,
-            query: torch.Tensor,
-            key: torch.Tensor,
-            cos: torch.Tensor,
-            sin: torch.Tensor,
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
     ):
         if self.is_rope_fused and AVAILABLE_MINDIESD:
             return self.rope_mindie(query, key, cos, sin)

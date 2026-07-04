@@ -1,30 +1,30 @@
-import torch, weakref, torch.distributed as dist
-from typing import Dict, Sequence, List, Optional
-from .utils import foreach_copy_, print_gpu_memory
+import weakref
+from collections.abc import Sequence
+
+import torch
+import torch.distributed as dist
+
+from .utils import foreach_copy_
 
 
 class OffloadManager:
     def __init__(
-            self,
-            root: torch.nn.Module,
-            module_groups: Dict[str, Sequence[torch.nn.Module]],
-            keep_n: Dict[str, int] | int,
-            device: Optional[torch.device] = None,
-            *,
-            dist_group: Optional[dist.ProcessGroup] = None,
-            sync_at_layer: bool = False,
+        self,
+        root: torch.nn.Module,
+        module_groups: dict[str, Sequence[torch.nn.Module]],
+        keep_n: dict[str, int] | int,
+        device: torch.device | None = None,
+        *,
+        dist_group: dist.ProcessGroup | None = None,
+        sync_at_layer: bool = False,
     ):
         self.root = weakref.proxy(root)
         self.device = device or next(root.parameters()).device
         self.groups = module_groups
-        self.keep_n = (
-            {k: keep_n for k in module_groups}
-            if isinstance(keep_n, int) else keep_n
-        )
+        self.keep_n = {k: keep_n for k in module_groups} if isinstance(keep_n, int) else keep_n
 
-        self.layer_params: Dict[str, List[List[torch.Tensor]]] = {
-            tag: [list(self._iter_tensors(m)) for m in grp]
-            for tag, grp in self.groups.items()
+        self.layer_params: dict[str, list[list[torch.Tensor]]] = {
+            tag: [list(self._iter_tensors(m)) for m in grp] for tag, grp in self.groups.items()
         }
 
         self.h2d_stream = torch.cuda.Stream()
@@ -36,7 +36,7 @@ class OffloadManager:
             raise RuntimeError("sync_at_layer=True 但未初始化 torch.distributed")
 
         self.enabled = False
-        self.handles: List[torch.utils.hooks.RemovableHandle] = []
+        self.handles: list[torch.utils.hooks.RemovableHandle] = []
 
         # 填充 index / depth
         for tag, grp in self.groups.items():
@@ -62,16 +62,10 @@ class OffloadManager:
         # 注册 hooks
         for tag, grp in self.groups.items():
             for m in grp:
-                self.handles.append(
-                    m.register_forward_pre_hook(
-                        self._prefetch_factory(tag), with_kwargs=False)
-                )
+                self.handles.append(m.register_forward_pre_hook(self._prefetch_factory(tag), with_kwargs=False))
                 # 为所有非常驻层注册释放hook
                 if m.index >= self.keep_n[tag]:
-                    self.handles.append(
-                        m.register_forward_hook(
-                            self._release_factory(tag), with_kwargs=False)
-                    )
+                    self.handles.append(m.register_forward_hook(self._release_factory(tag), with_kwargs=False))
         self.enabled = True
 
     def disable(self):
@@ -82,9 +76,9 @@ class OffloadManager:
         self.enabled = False
 
     # 新增四个内部方法，对之前的hook()进行拆分，降低圈复杂度
-    def _maybe_free_prev_layer(self, prev_idx: int, keep_n: int,
-                               grp: Sequence[torch.nn.Module],
-                               params: List[List[torch.Tensor]]) -> None:
+    def _maybe_free_prev_layer(
+        self, prev_idx: int, keep_n: int, grp: Sequence[torch.nn.Module], params: list[list[torch.Tensor]]
+    ) -> None:
         if prev_idx < keep_n:
             return
         prev_mod = grp[prev_idx]
@@ -99,7 +93,7 @@ class OffloadManager:
             self.h2d_stream.wait_event(compute_evt)
             for p in params[prev_idx]:
                 self._release_tensor(p)
-        setattr(prev_mod, "_so_freed", True)
+        prev_mod._so_freed = True
 
     # === 新增：把“等待本层预取完成”的逻辑封装 ===
     def _wait_prefetch_if_needed(self, module, keep_n: int) -> None:
@@ -109,21 +103,17 @@ class OffloadManager:
         if evt is None:
             return
         torch.cuda.current_stream().wait_event(evt)
-        setattr(module, "_so_prefetch_evt", None)
+        module._so_prefetch_evt = None
 
     # === 新增：是否应该预取下一层（把边界与状态判断打包） ===
-    def _should_prefetch_next(self, next_idx: int, keep_n: int,
-                              grp: Sequence[torch.nn.Module]) -> bool:
+    def _should_prefetch_next(self, next_idx: int, keep_n: int, grp: Sequence[torch.nn.Module]) -> bool:
         if not (keep_n <= next_idx < len(grp)):
             return False
         # getattr 一步到位，少一次 and 判断
         return getattr(grp[next_idx], "_so_prefetch_evt", None) is None
 
     # === 新增：执行真正的预取（包含分配、foreach_copy_、记录事件）===
-    def _do_prefetch(self, next_idx: int,
-                     params: List[List[torch.Tensor]],
-                     next_mod: torch.nn.Module) -> None:
-
+    def _do_prefetch(self, next_idx: int, params: list[list[torch.Tensor]], next_mod: torch.nn.Module) -> None:
         with torch.cuda.stream(self.h2d_stream):
             src_list, dst_list = [], []
             for p in params[next_idx]:
@@ -136,7 +126,7 @@ class OffloadManager:
             foreach_copy_(dst_list, src_list, non_blocking=True)
             evt = torch.cuda.Event()
             self.h2d_stream.record_event(evt)
-            setattr(next_mod, "_so_prefetch_evt", evt)
+            next_mod._so_prefetch_evt = evt
 
     # === 重写：把复杂度从 hook 中“搬走”，让它只做流程编排 ===
     def _prefetch_factory(self, tag: str):
@@ -173,9 +163,9 @@ class OffloadManager:
             # 显存释放将在下一层的prefetch_hook中进行
             evt = torch.cuda.Event()
             torch.cuda.current_stream().record_event(evt)
-            setattr(module, "_so_compute_evt", evt)
-            setattr(module, "_so_needs_free", True)
-            setattr(module, "_so_freed", False)
+            module._so_compute_evt = evt
+            module._so_needs_free = True
+            module._so_freed = False
 
         return hook
 
@@ -199,7 +189,7 @@ class OffloadManager:
                 offset = 0
                 for p in self.layer_params[tag][idx]:
                     if not hasattr(p, "p_cpu"):
-                        p.p_cpu = all_tmp_cpu[offset:offset + p.numel()].view(p.shape)
+                        p.p_cpu = all_tmp_cpu[offset : offset + p.numel()].view(p.shape)
                         offset += p.numel()
 
                         # p.p_cpu = torch.empty_like(
@@ -231,8 +221,7 @@ class OffloadManager:
             for idx, m in enumerate(grp):
                 for p in self.layer_params[tag][idx]:
                     if p.data.untyped_storage().size() == 0:
-                        restored = torch.empty(
-                            p.orig_shape, dtype=p.dtype, device=self.device)
+                        restored = torch.empty(p.orig_shape, dtype=p.dtype, device=self.device)
                         restored.copy_(p.p_cpu, non_blocking=False)
                         p.data = restored
                     elif p.data.device != self.device:

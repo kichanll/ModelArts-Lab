@@ -1,7 +1,6 @@
 # https://github.com/ltkong218/IFRNet/blob/main/models/IFRNet_S.py
 # https://github.com/ltkong218/IFRNet/blob/main/utils.py
 import torch
-import torch_npu
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -36,9 +35,7 @@ def get_robust_weight(flow_pred, flow_gt, beta):
 
 
 def resize(x, scale_factor):
-    return F.interpolate(
-        x, scale_factor=scale_factor, mode="bilinear", align_corners=False
-    )
+    return F.interpolate(x, scale_factor=scale_factor, mode="bilinear", align_corners=False)
 
 
 def convrelu(
@@ -68,12 +65,10 @@ def convrelu(
 
 class ResBlock(nn.Module):
     def __init__(self, in_channels, side_channels, bias=True):
-        super(ResBlock, self).__init__()
+        super(ResBlock, self).__init__()  # noqa: UP008
         self.side_channels = side_channels
         self.conv1 = nn.Sequential(
-            nn.Conv2d(
-                in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias
-            ),
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias),
             nn.PReLU(in_channels),
         )
         self.conv2 = nn.Sequential(
@@ -88,9 +83,7 @@ class ResBlock(nn.Module):
             nn.PReLU(side_channels),
         )
         self.conv3 = nn.Sequential(
-            nn.Conv2d(
-                in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias
-            ),
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias),
             nn.PReLU(in_channels),
         )
         self.conv4 = nn.Sequential(
@@ -104,39 +97,25 @@ class ResBlock(nn.Module):
             ),
             nn.PReLU(side_channels),
         )
-        self.conv5 = nn.Conv2d(
-            in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias
-        )
+        self.conv5 = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias)
         self.prelu = nn.PReLU(in_channels)
 
     def forward(self, x):
         out = self.conv1(x)
-        out[:, -self.side_channels :, :, :] = self.conv2(
-            out[:, -self.side_channels :, :, :]
-        )
+        out[:, -self.side_channels :, :, :] = self.conv2(out[:, -self.side_channels :, :, :])
         out = self.conv3(out)
-        out[:, -self.side_channels :, :, :] = self.conv4(
-            out[:, -self.side_channels :, :, :]
-        )
+        out[:, -self.side_channels :, :, :] = self.conv4(out[:, -self.side_channels :, :, :])
         out = self.prelu(x + self.conv5(out))
         return out
 
 
 class Encoder(nn.Module):
     def __init__(self):
-        super(Encoder, self).__init__()
-        self.pyramid1 = nn.Sequential(
-            convrelu(3, 24, 3, 2, 1), convrelu(24, 24, 3, 1, 1)
-        )
-        self.pyramid2 = nn.Sequential(
-            convrelu(24, 36, 3, 2, 1), convrelu(36, 36, 3, 1, 1)
-        )
-        self.pyramid3 = nn.Sequential(
-            convrelu(36, 54, 3, 2, 1), convrelu(54, 54, 3, 1, 1)
-        )
-        self.pyramid4 = nn.Sequential(
-            convrelu(54, 72, 3, 2, 1), convrelu(72, 72, 3, 1, 1)
-        )
+        super(Encoder, self).__init__()  # noqa: UP008
+        self.pyramid1 = nn.Sequential(convrelu(3, 24, 3, 2, 1), convrelu(24, 24, 3, 1, 1))
+        self.pyramid2 = nn.Sequential(convrelu(24, 36, 3, 2, 1), convrelu(36, 36, 3, 1, 1))
+        self.pyramid3 = nn.Sequential(convrelu(36, 54, 3, 2, 1), convrelu(54, 54, 3, 1, 1))
+        self.pyramid4 = nn.Sequential(convrelu(54, 72, 3, 2, 1), convrelu(72, 72, 3, 1, 1))
 
     def forward(self, img):
         f1 = self.pyramid1(img)
@@ -148,7 +127,7 @@ class Encoder(nn.Module):
 
 class Decoder4(nn.Module):
     def __init__(self):
-        super(Decoder4, self).__init__()
+        super(Decoder4, self).__init__()  # noqa: UP008
         self.convblock = nn.Sequential(
             convrelu(144 + 1, 144),
             ResBlock(144, 24),
@@ -165,7 +144,7 @@ class Decoder4(nn.Module):
 
 class Decoder3(nn.Module):
     def __init__(self):
-        super(Decoder3, self).__init__()
+        super(Decoder3, self).__init__()  # noqa: UP008
         self.convblock = nn.Sequential(
             convrelu(166, 162),
             ResBlock(162, 24),
@@ -182,7 +161,7 @@ class Decoder3(nn.Module):
 
 class Decoder2(nn.Module):
     def __init__(self):
-        super(Decoder2, self).__init__()
+        super(Decoder2, self).__init__()  # noqa: UP008
         self.convblock = nn.Sequential(
             convrelu(112, 108),
             ResBlock(108, 24),
@@ -199,7 +178,7 @@ class Decoder2(nn.Module):
 
 class Decoder1(nn.Module):
     def __init__(self):
-        super(Decoder1, self).__init__()
+        super(Decoder1, self).__init__()  # noqa: UP008
         self.convblock = nn.Sequential(
             convrelu(76, 72),
             ResBlock(72, 24),
@@ -216,7 +195,7 @@ class Decoder1(nn.Module):
 
 class IRFNet_S(nn.Module):
     def __init__(self):
-        super(IRFNet_S, self).__init__()
+        super(IRFNet_S, self).__init__()  # noqa: UP008
         self.encoder = Encoder()
         self.decoder4 = Decoder4()
         self.decoder3 = Decoder3()
@@ -232,17 +211,12 @@ class IRFNet_S(nn.Module):
         img0 = F.pad(img0, padding)
         img1 = F.pad(img1, padding)
 
-        #Support multiple batches
+        # Support multiple batches
         embt = torch.tensor([timestep] * n).view(n, 1, 1, 1).float().to(img0.device)
         if img0.dtype == torch.float16:
             embt = embt.half()
 
-        mean_ = (
-            torch.cat([img0, img1], 2)
-            .mean(1, keepdim=True)
-            .mean(2, keepdim=True)
-            .mean(3, keepdim=True)
-        )
+        mean_ = torch.cat([img0, img1], 2).mean(1, keepdim=True).mean(2, keepdim=True).mean(3, keepdim=True)
         img0 = img0 - mean_
         img1 = img1 - mean_
 
@@ -273,12 +247,8 @@ class IRFNet_S(nn.Module):
         up_mask_1 = torch.sigmoid(out1[:, 4:5])
         up_res_1 = out1[:, 5:]
 
-        up_flow0_1 = resize(up_flow0_1, scale_factor=(1.0 / scale_factor)) * (
-            1.0 / scale_factor
-        )
-        up_flow1_1 = resize(up_flow1_1, scale_factor=(1.0 / scale_factor)) * (
-            1.0 / scale_factor
-        )
+        up_flow0_1 = resize(up_flow0_1, scale_factor=(1.0 / scale_factor)) * (1.0 / scale_factor)
+        up_flow1_1 = resize(up_flow1_1, scale_factor=(1.0 / scale_factor)) * (1.0 / scale_factor)
         up_mask_1 = resize(up_mask_1, scale_factor=(1.0 / scale_factor))
         up_res_1 = resize(up_res_1, scale_factor=(1.0 / scale_factor))
 

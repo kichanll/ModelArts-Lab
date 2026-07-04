@@ -1,18 +1,11 @@
 import math
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch_npu
-from torch_npu.contrib import transfer_to_npu
-from diffusers.models.transformers import transformer_wan
-from diffusers.models.transformers.transformer_wan import WanImageEmbedding, _get_added_kv_projections, \
-    _get_qkv_projections
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.loaders import FromOriginalModelMixin, PeftAdapterMixin
-from diffusers.utils import USE_PEFT_BACKEND, logging, scale_lora_layers, unscale_lora_layers
-from diffusers.utils.torch_utils import maybe_allow_in_graph
 from diffusers.models.attention import FeedForward
 from diffusers.models.attention_processor import Attention
 from diffusers.models.cache_utils import CacheMixin
@@ -20,14 +13,32 @@ from diffusers.models.embeddings import PixArtAlphaTextProjection, TimestepEmbed
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.normalization import FP32LayerNorm
+from diffusers.models.transformers import transformer_wan
+from diffusers.models.transformers.transformer_wan import (
+    WanImageEmbedding,
+    _get_added_kv_projections,
+    _get_qkv_projections,
+)
+from diffusers.utils import USE_PEFT_BACKEND, logging, scale_lora_layers, unscale_lora_layers
+from diffusers.utils.torch_utils import maybe_allow_in_graph
 
 LENGTH_CONTEXT = 512  # wan2.1 is longer than 512, wan2.2 is 512
 
 logger = logging.get_logger("transformer_wan")  # pylint: disable=invalid-name
 
-from x_base import gather_sequence, get_pad, set_pad, split_sequence, \
-    ParallelManager, pad_tensor, all_to_all_before_attn, all_to_all_after_attn, \
-    attention_manager, rope_manager, is_phaa_enabled, get_phaa_split_num
+from x_base import (  # noqa: E402
+    ParallelManager,
+    all_to_all_after_attn,
+    all_to_all_before_attn,
+    attention_manager,
+    gather_sequence,
+    get_pad,
+    get_phaa_split_num,
+    is_phaa_enabled,
+    rope_manager,
+    set_pad,
+    split_sequence,
+)
 
 
 class AscendWanAttnProcessor2_0:
@@ -35,12 +46,13 @@ class AscendWanAttnProcessor2_0:
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("WanAttnProcessor2_0 requires PyTorch 2.0. To use it, please upgrade PyTorch to 2.0.")
 
-    def i2v_forward(self,
-                    attn: Attention,
-                    query: Optional[torch.Tensor] = None,
-                    encoder_hidden_states_img: Optional[torch.Tensor] = None,
-                    attn_heads: int = None,
-                    ):
+    def i2v_forward(
+        self,
+        attn: Attention,
+        query: torch.Tensor | None = None,
+        encoder_hidden_states_img: torch.Tensor | None = None,
+        attn_heads: int = None,
+    ):
         # I2V task
         hidden_states_img = None
         if encoder_hidden_states_img is not None:
@@ -56,24 +68,26 @@ class AscendWanAttnProcessor2_0:
             key_img = key_img.unflatten(2, (attn_heads, -1)).transpose(1, 2)
             value_img = value_img.unflatten(2, (attn_heads, -1)).transpose(1, 2)
 
-            hidden_states_img = attention_manager.attention(query, key_img, value_img, attn_mask=None, dropout_p=0.0,
-                                                            is_causal=False)
+            hidden_states_img = attention_manager.attention(
+                query, key_img, value_img, attn_mask=None, dropout_p=0.0, is_causal=False
+            )
 
             hidden_states_img = hidden_states_img.transpose(1, 2).flatten(2, 3)
             hidden_states_img = hidden_states_img.type_as(query)
 
             if attn.parallel_manager is not None and attn.parallel_manager.sp_size > 1:
                 hidden_states_img = all_to_all_after_attn(
-                    hidden_states_img, attn.parallel_manager.sp_group, scatter_dim=1, gather_dim=2)
+                    hidden_states_img, attn.parallel_manager.sp_group, scatter_dim=1, gather_dim=2
+                )
         return hidden_states_img
 
     def __call__(
-            self,
-            attn: Attention,
-            hidden_states: torch.Tensor,
-            encoder_hidden_states: Optional[torch.Tensor] = None,
-            attention_mask: Optional[torch.Tensor] = None,
-            rotary_emb: Optional[torch.Tensor] = None,
+        self,
+        attn: Attention,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rotary_emb: torch.Tensor | None = None,
     ) -> torch.Tensor:
         encoder_hidden_states_img = None
         if attn.add_k_proj is not None:
@@ -89,19 +103,26 @@ class AscendWanAttnProcessor2_0:
         query = attn.norm_q(query)
         key = attn.norm_k(key)
 
-        if attn.parallel_manager is not None and attn.parallel_manager.sp_size > 1 and not attn.parallel_manager.enable_usp:
+        if (
+            attn.parallel_manager is not None
+            and attn.parallel_manager.sp_size > 1
+            and not attn.parallel_manager.enable_usp
+        ):
             if attn.heads % attn.parallel_manager.sp_size != 0:
                 raise ValueError(
-                    f"Number of heads {attn.heads} must be divisible by sequence parallel size {attn.parallel_manager.sp_size}")
+                    f"Number of heads {attn.heads} must be divisible by sequence parallel size {attn.parallel_manager.sp_size}"  # noqa: E501
+                )
 
             if is_phaa_enabled():
-                return (self._phaa_parallel(attn=attn,
-                                            query=query,
-                                            key=key,
-                                            value=value,
-                                            encoder_hidden_states_img=encoder_hidden_states_img,
-                                            attention_mask=attention_mask,
-                                            rotary_emb=rotary_emb))
+                return self._phaa_parallel(
+                    attn=attn,
+                    query=query,
+                    key=key,
+                    value=value,
+                    encoder_hidden_states_img=encoder_hidden_states_img,
+                    attention_mask=attention_mask,
+                    rotary_emb=rotary_emb,
+                )
 
             attn_heads = attn.heads // attn.parallel_manager.sp_size
             query, key, value = map(
@@ -126,9 +147,9 @@ class AscendWanAttnProcessor2_0:
             value = value.transpose(1, 2).contiguous()
 
             window_size = (-1, -1)
-            alibi_slopes, attn_bias = None, None
-            dropout_mask = None
-            deterministic=False
+            alibi_slopes, attn_bias = None, None  # noqa: F841
+            dropout_mask = None  # noqa: F841
+            deterministic = False
 
             hidden_states = self.usp_attn(
                 query,
@@ -141,19 +162,21 @@ class AscendWanAttnProcessor2_0:
                 alibi_slopes=alibi_slopes,
                 deterministic=deterministic,
                 return_attn_probs=True,
-                layout="BSND"
+                layout="BSND",
             )
             hidden_states = hidden_states.flatten(2, 3)
             hidden_states = hidden_states.type_as(query)
         else:
             hidden_states = attention_manager.attention(
-                query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False)
+                query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+            )
             hidden_states = hidden_states.transpose(1, 2).flatten(2, 3)
             hidden_states = hidden_states.type_as(query)
 
             if attn.parallel_manager is not None and attn.parallel_manager.sp_size > 1:
                 hidden_states = all_to_all_after_attn(
-                    hidden_states, attn.parallel_manager.sp_group, scatter_dim=1, gather_dim=2)
+                    hidden_states, attn.parallel_manager.sp_group, scatter_dim=1, gather_dim=2
+                )
 
         if hidden_states_img is not None:
             hidden_states = hidden_states + hidden_states_img
@@ -163,14 +186,14 @@ class AscendWanAttnProcessor2_0:
         return hidden_states
 
     def _phaa_parallel(
-            self,
-            attn: Attention,
-            query: torch.Tensor,
-            key: torch.Tensor,
-            value: torch.Tensor,
-            encoder_hidden_states_img: Optional[torch.Tensor] = None,
-            attention_mask: Optional[torch.Tensor] = None,
-            rotary_emb: Optional[torch.Tensor] = None,
+        self,
+        attn: Attention,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        encoder_hidden_states_img: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        rotary_emb: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """PHAA (Parallel Head All2ALL) attention executes Flash Attention in parallel with all2all communication."""
 
@@ -182,8 +205,7 @@ class AscendWanAttnProcessor2_0:
             if pad > 0:
                 pad_size = list(tensor.shape)
                 pad_size[dim] = pad
-                tensor = torch.cat(
-                    [tensor, torch.zeros(pad_size, dtype=tensor.dtype, device=tensor.device)], dim=dim)
+                tensor = torch.cat([tensor, torch.zeros(pad_size, dtype=tensor.dtype, device=tensor.device)], dim=dim)
             return tensor
 
         def reshape_for_attention(x):
@@ -207,18 +229,22 @@ class AscendWanAttnProcessor2_0:
         # Prepare events for synchronization
         all2all_before_attn_is_finished = [torch.npu.Event() for _ in range(fa_split_num)]
         fa_is_finished = [torch.npu.Event() for _ in range(fa_split_num)]
-        all2all_img_before_attn_is_finished = [torch.npu.Event() for _ in range(fa_split_num)]
+        all2all_img_before_attn_is_finished = [torch.npu.Event() for _ in range(fa_split_num)]  # noqa: F841
         fa_img_is_finished = [torch.npu.Event() for _ in range(fa_split_num)]
 
         # Prepare output tensors
-        query_a2a_buf = torch.empty((W_S * fa_split_num, Sq, B, attn_heads_per_split, H // attn.heads),
-                                    device=query.device, dtype=query.dtype)
-        key_a2a_buf = torch.empty((W_S * fa_split_num, Skv, B, attn_heads_per_split, H // attn.heads),
-                                  device=key.device, dtype=key.dtype)
-        value_a2a_buf = torch.empty((W_S * fa_split_num, Skv, B, attn_heads_per_split, H // attn.heads),
-                                    device=value.device, dtype=value.dtype)
-        hidden_states = torch.empty((W_S * fa_split_num, Sq, B, H // W_S // fa_split_num),
-                                    device=query.device, dtype=query.dtype)
+        query_a2a_buf = torch.empty(
+            (W_S * fa_split_num, Sq, B, attn_heads_per_split, H // attn.heads), device=query.device, dtype=query.dtype
+        )
+        key_a2a_buf = torch.empty(
+            (W_S * fa_split_num, Skv, B, attn_heads_per_split, H // attn.heads), device=key.device, dtype=key.dtype
+        )
+        value_a2a_buf = torch.empty(
+            (W_S * fa_split_num, Skv, B, attn_heads_per_split, H // attn.heads), device=value.device, dtype=value.dtype
+        )
+        hidden_states = torch.empty(
+            (W_S * fa_split_num, Sq, B, H // W_S // fa_split_num), device=query.device, dtype=query.dtype
+        )
         hidden_states_buf = [None] * fa_split_num
         hidden_states_img_buf = [None] * fa_split_num
 
@@ -226,25 +252,30 @@ class AscendWanAttnProcessor2_0:
 
         # 1. Communicate `query`, `key`, `value` tensors while the next tensor is being reshaped
         # B S WorldSize*SplitNum*HeadNum*D -> WorldSize*SplitNum S B HeadNum D
-        query = query.unflatten(-1, (W_S * fa_split_num, attn_heads_per_split, -1)).permute(
-            [2, 1, 0, 3, 4]).contiguous()
+        query = (
+            query.unflatten(-1, (W_S * fa_split_num, attn_heads_per_split, -1)).permute([2, 1, 0, 3, 4]).contiguous()
+        )
         self.comm_stream.wait_stream(torch.npu.current_stream())
         with torch.npu.stream(self.comm_stream):
-            torch.distributed.all_to_all_single(get_chunk(query_a2a_buf, 0), get_chunk(query, 0),
-                                                group=attn.parallel_manager.sp_group, async_op=False)
+            torch.distributed.all_to_all_single(
+                get_chunk(query_a2a_buf, 0), get_chunk(query, 0), group=attn.parallel_manager.sp_group, async_op=False
+            )
 
         key = key.unflatten(-1, (W_S * fa_split_num, attn_heads_per_split, -1)).permute([2, 1, 0, 3, 4]).contiguous()
         self.comm_stream.wait_stream(torch.npu.current_stream())
         with torch.npu.stream(self.comm_stream):
-            torch.distributed.all_to_all_single(get_chunk(key_a2a_buf, 0), get_chunk(key, 0),
-                                                group=attn.parallel_manager.sp_group, async_op=False)
+            torch.distributed.all_to_all_single(
+                get_chunk(key_a2a_buf, 0), get_chunk(key, 0), group=attn.parallel_manager.sp_group, async_op=False
+            )
 
-        value = value.unflatten(-1, (W_S * fa_split_num, attn_heads_per_split, -1)).permute(
-            [2, 1, 0, 3, 4]).contiguous()
+        value = (
+            value.unflatten(-1, (W_S * fa_split_num, attn_heads_per_split, -1)).permute([2, 1, 0, 3, 4]).contiguous()
+        )
         self.comm_stream.wait_stream(torch.npu.current_stream())
         with torch.npu.stream(self.comm_stream):
-            torch.distributed.all_to_all_single(get_chunk(value_a2a_buf, 0), get_chunk(value, 0),
-                                                group=attn.parallel_manager.sp_group, async_op=False)
+            torch.distributed.all_to_all_single(
+                get_chunk(value_a2a_buf, 0), get_chunk(value, 0), group=attn.parallel_manager.sp_group, async_op=False
+            )
             all2all_before_attn_is_finished[0].record(self.comm_stream)
 
         if encoder_hidden_states_img is not None:
@@ -258,22 +289,23 @@ class AscendWanAttnProcessor2_0:
             key_img = key_img.unflatten(2, (attn.heads // W_S, -1)).transpose(1, 2)
             value_img = value_img.unflatten(2, (attn.heads // W_S, -1)).transpose(1, 2)
 
-            hidden_states_img = torch.empty((W_S * fa_split_num, Sq, B, H // W_S // fa_split_num), dtype=query.dtype,
-                                            device=query.device)
+            hidden_states_img = torch.empty(
+                (W_S * fa_split_num, Sq, B, H // W_S // fa_split_num), dtype=query.dtype, device=query.device
+            )
 
         for step in range(fa_split_num):
             # 2. Compute attention
             torch.npu.current_stream().wait_event(all2all_before_attn_is_finished[step])
             # WS S B N D -> B N WS*S D
-            query_, key_, value_ = map(lambda x: reshape_for_attention(get_chunk(x, step)),
-                                       [query_a2a_buf, key_a2a_buf, value_a2a_buf])
+            query_, key_, value_ = map(
+                lambda x: reshape_for_attention(get_chunk(x, step)), [query_a2a_buf, key_a2a_buf, value_a2a_buf]
+            )
             if rotary_emb is not None:
                 query_, key_ = rope_manager.rope(query_, key_, *rotary_emb)
 
-            hidden_states_buf[step] = attention_manager.attention(query_, key_, value_,
-                                                                  attn_mask=attention_mask,
-                                                                  dropout_p=0.0,
-                                                                  is_causal=False).type_as(query)
+            hidden_states_buf[step] = attention_manager.attention(
+                query_, key_, value_, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+            ).type_as(query)
             # B N S D -> WS S//WS B N*D
             hidden_states_buf[step] = reshape_after_attention(hidden_states_buf[step])
             fa_is_finished[step].record()
@@ -284,8 +316,8 @@ class AscendWanAttnProcessor2_0:
                 value_img_ = torch.narrow(value_img, 1, attn_heads_per_split * step, attn_heads_per_split)
 
                 hidden_states_img_buf[step] = attention_manager.attention(
-                    query_, key_img_, value_img_, attn_mask=attention_mask, dropout_p=0.0, is_causal=False).type_as(
-                    query)
+                    query_, key_img_, value_img_, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+                ).type_as(query)
 
                 # B N S D -> WS S//WS B N*D
                 hidden_states_img_buf[step] = reshape_after_attention(hidden_states_img_buf[step])
@@ -295,24 +327,30 @@ class AscendWanAttnProcessor2_0:
                 # 1. Communicate tensors before attention
                 if step + 1 < fa_split_num:
                     for source, target in zip([query, key, value], [query_a2a_buf, key_a2a_buf, value_a2a_buf]):
-                        torch.distributed.all_to_all_single(get_chunk(target, step + 1),
-                                                            get_chunk(source, step + 1),
-                                                            group=attn.parallel_manager.sp_group,
-                                                            async_op=False)
+                        torch.distributed.all_to_all_single(
+                            get_chunk(target, step + 1),
+                            get_chunk(source, step + 1),
+                            group=attn.parallel_manager.sp_group,
+                            async_op=False,
+                        )
                     all2all_before_attn_is_finished[step + 1].record(self.comm_stream)
                 # 3. Communicate tensors after attention
                 self.comm_stream.wait_event(fa_is_finished[step])
-                torch.distributed.all_to_all_single(get_chunk(hidden_states, step),
-                                                    hidden_states_buf[step],
-                                                    group=attn.parallel_manager.sp_group,
-                                                    async_op=False)
+                torch.distributed.all_to_all_single(
+                    get_chunk(hidden_states, step),
+                    hidden_states_buf[step],
+                    group=attn.parallel_manager.sp_group,
+                    async_op=False,
+                )
                 # 3.1 Communicate img tensors after attention
                 if hidden_states_img_buf[step] is not None:
                     self.comm_stream.wait_event(fa_img_is_finished[step])
-                    torch.distributed.all_to_all_single(get_chunk(hidden_states_img, step),
-                                                        hidden_states_img_buf[step],
-                                                        group=attn.parallel_manager.sp_group,
-                                                        async_op=False)
+                    torch.distributed.all_to_all_single(
+                        get_chunk(hidden_states_img, step),
+                        hidden_states_img_buf[step],
+                        group=attn.parallel_manager.sp_group,
+                        async_op=False,
+                    )
 
         torch.npu.current_stream().wait_stream(self.comm_stream)
         if hidden_states_img is not None:
@@ -327,11 +365,11 @@ class AscendWanAttnProcessor2_0:
 
 class AscendWanRotaryPosEmbed(nn.Module):
     def __init__(
-            self,
-            attention_head_dim: int,
-            patch_size: Tuple[int, int, int],
-            max_seq_len: int,
-            theta: float = 10000.0,
+        self,
+        attention_head_dim: int,
+        patch_size: tuple[int, int, int],
+        max_seq_len: int,
+        theta: float = 10000.0,
     ):
         super().__init__()
 
@@ -392,14 +430,14 @@ class AscendWanRotaryPosEmbed(nn.Module):
 @maybe_allow_in_graph
 class AscendWanTransformerBlock(nn.Module):
     def __init__(
-            self,
-            dim: int,
-            ffn_dim: int,
-            num_heads: int,
-            qk_norm: str = "rms_norm_across_heads",
-            cross_attn_norm: bool = False,
-            eps: float = 1e-6,
-            added_kv_proj_dim: Optional[int] = None,
+        self,
+        dim: int,
+        ffn_dim: int,
+        num_heads: int,
+        qk_norm: str = "rms_norm_across_heads",
+        cross_attn_norm: bool = False,
+        eps: float = 1e-6,
+        added_kv_proj_dim: int | None = None,
     ):
         super().__init__()
 
@@ -441,19 +479,19 @@ class AscendWanTransformerBlock(nn.Module):
         self.ffn = FeedForward(dim, inner_dim=ffn_dim, activation_fn="gelu-approximate")
         self.norm3 = FP32LayerNorm(dim, eps, elementwise_affine=False)
 
-        self.scale_shift_table = nn.Parameter(torch.randn(1, 6, dim) / dim ** 0.5)
+        self.scale_shift_table = nn.Parameter(torch.randn(1, 6, dim) / dim**0.5)
 
     def forward(
-            self,
-            hidden_states: torch.Tensor,
-            encoder_hidden_states: torch.Tensor,
-            temb: torch.Tensor,
-            rotary_emb: torch.Tensor,
+        self,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: torch.Tensor,
+        temb: torch.Tensor,
+        rotary_emb: torch.Tensor,
     ) -> torch.Tensor:
         if temb.ndim == 4:
             # temb: batch_size, seq_len, 6, inner_dim (wan2.2 ti2v)
             shift_msa, scale_msa, gate_msa, c_shift_msa, c_scale_msa, c_gate_msa = (
-                    self.scale_shift_table.unsqueeze(0) + temb.float()
+                self.scale_shift_table.unsqueeze(0) + temb.float()
             ).chunk(6, dim=2)
             # batch_size, seq_len, 1, inner_dim
             shift_msa = shift_msa.squeeze(2)
@@ -465,7 +503,7 @@ class AscendWanTransformerBlock(nn.Module):
         else:
             # temb: batch_size, 6, inner_dim (wan2.1/wan2.2 14B)
             shift_msa, scale_msa, gate_msa, c_shift_msa, c_scale_msa, c_gate_msa = (
-                    self.scale_shift_table + temb.float()
+                self.scale_shift_table + temb.float()
             ).chunk(6, dim=1)
 
         # 1. Self-attention
@@ -490,13 +528,13 @@ class AscendWanTransformerBlock(nn.Module):
 
 class AscendWanTimeTextImageEmbedding(nn.Module):
     def __init__(
-            self,
-            dim: int,
-            time_freq_dim: int,
-            time_proj_dim: int,
-            text_embed_dim: int,
-            image_embed_dim: Optional[int] = None,
-            pos_embed_seq_len: Optional[int] = None,
+        self,
+        dim: int,
+        time_freq_dim: int,
+        time_proj_dim: int,
+        text_embed_dim: int,
+        image_embed_dim: int | None = None,
+        pos_embed_seq_len: int | None = None,
     ):
         super().__init__()
 
@@ -511,11 +549,11 @@ class AscendWanTimeTextImageEmbedding(nn.Module):
             self.image_embedder = WanImageEmbedding(image_embed_dim, dim, pos_embed_seq_len=pos_embed_seq_len)
 
     def forward(
-            self,
-            timestep: torch.Tensor,
-            encoder_hidden_states: torch.Tensor,
-            encoder_hidden_states_image: Optional[torch.Tensor] = None,
-            timestep_seq_len: Optional[int] = None,
+        self,
+        timestep: torch.Tensor,
+        encoder_hidden_states: torch.Tensor,
+        encoder_hidden_states_image: torch.Tensor | None = None,
+        timestep_seq_len: int | None = None,
     ):
         timestep = self.timesteps_proj(timestep)
         if timestep_seq_len is not None:
@@ -586,23 +624,23 @@ class AscendWanTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
 
     @register_to_config
     def __init__(
-            self,
-            patch_size: Tuple[int] = (1, 2, 2),
-            num_attention_heads: int = 40,
-            attention_head_dim: int = 128,
-            in_channels: int = 16,
-            out_channels: int = 16,
-            text_dim: int = 4096,
-            freq_dim: int = 256,
-            ffn_dim: int = 13824,
-            num_layers: int = 40,
-            cross_attn_norm: bool = True,
-            qk_norm: Optional[str] = "rms_norm_across_heads",
-            eps: float = 1e-6,
-            image_dim: Optional[int] = None,
-            added_kv_proj_dim: Optional[int] = None,
-            rope_max_seq_len: int = 1024,
-            pos_embed_seq_len: Optional[int] = None,
+        self,
+        patch_size: tuple[int] = (1, 2, 2),
+        num_attention_heads: int = 40,
+        attention_head_dim: int = 128,
+        in_channels: int = 16,
+        out_channels: int = 16,
+        text_dim: int = 4096,
+        freq_dim: int = 256,
+        ffn_dim: int = 13824,
+        num_layers: int = 40,
+        cross_attn_norm: bool = True,
+        qk_norm: str | None = "rms_norm_across_heads",
+        eps: float = 1e-6,
+        image_dim: int | None = None,
+        added_kv_proj_dim: int | None = None,
+        rope_max_seq_len: int = 1024,
+        pos_embed_seq_len: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -641,7 +679,7 @@ class AscendWanTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
         # 4. Output norm & projection
         self.norm_out = FP32LayerNorm(inner_dim, eps, elementwise_affine=False)
         self.proj_out = nn.Linear(inner_dim, out_channels * math.prod(patch_size))
-        self.scale_shift_table = nn.Parameter(torch.randn(1, 2, inner_dim) / inner_dim ** 0.5)
+        self.scale_shift_table = nn.Parameter(torch.randn(1, 2, inner_dim) / inner_dim**0.5)
 
         self.gradient_checkpointing = False
         # parallel
@@ -660,7 +698,8 @@ class AscendWanTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
         if self.parallel_manager.enable_usp:
             from yunchang import LongContextAttention
             from yunchang.kernels import AttnType
-            ring_impl_type="basic"
+
+            ring_impl_type = "basic"
             self.usp_attn = LongContextAttention(
                 ring_impl_type=ring_impl_type,
                 attn_type=AttnType.NPU,
@@ -674,13 +713,12 @@ class AscendWanTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
                 module.parallel_manager = self.parallel_manager
 
     def forward_block(
-            self,
-            hidden_states: torch.Tensor,
-            encoder_hidden_states: torch.Tensor,
-            timestep_proj: torch.Tensor,
-            rotary_emb: torch.Tensor
+        self,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: torch.Tensor,
+        timestep_proj: torch.Tensor,
+        rotary_emb: torch.Tensor,
     ) -> torch.Tensor:
-
         if self.parallel_manager is not None and self.parallel_manager.enable_usp:
             set_pad("rope", rotary_emb[0].shape[2], self.parallel_manager.sp_group)
             rotary_emb_0 = split_sequence(rotary_emb[0], self.parallel_manager.sp_group, dim=2, pad=get_pad("rope"))
@@ -695,8 +733,9 @@ class AscendWanTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
 
             if encoder_hidden_states.size(1) <= LENGTH_CONTEXT:
                 set_pad("encode_pad", encoder_hidden_states.shape[1], self.parallel_manager.sp_group)
-                encoder_hidden_states = split_sequence(encoder_hidden_states, self.parallel_manager.sp_group, dim=1,
-                                                       pad=get_pad("encode_pad"))
+                encoder_hidden_states = split_sequence(
+                    encoder_hidden_states, self.parallel_manager.sp_group, dim=1, pad=get_pad("encode_pad")
+                )
 
         # 4. Transformer blocks
         if torch.is_grad_enabled() and self.gradient_checkpointing:
@@ -709,19 +748,18 @@ class AscendWanTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
                 hidden_states = block(hidden_states, encoder_hidden_states, timestep_proj, rotary_emb)
 
         if self.parallel_manager is not None and self.parallel_manager.sp_size > 1:
-            hidden_states = gather_sequence(
-                hidden_states, self.parallel_manager.sp_group, dim=1, pad=get_pad("pad"))
+            hidden_states = gather_sequence(hidden_states, self.parallel_manager.sp_group, dim=1, pad=get_pad("pad"))
         return hidden_states
 
     def forward(
-            self,
-            hidden_states: torch.Tensor,
-            timestep: torch.LongTensor,
-            encoder_hidden_states: torch.Tensor,
-            encoder_hidden_states_image: Optional[torch.Tensor] = None,
-            return_dict: bool = True,
-            attention_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+        self,
+        hidden_states: torch.Tensor,
+        timestep: torch.LongTensor,
+        encoder_hidden_states: torch.Tensor,
+        encoder_hidden_states_image: torch.Tensor | None = None,
+        return_dict: bool = True,
+        attention_kwargs: dict[str, Any] | None = None,
+    ) -> torch.Tensor | dict[str, torch.Tensor]:
         attention_manager.update_t_idx()
         if attention_kwargs is not None:
             attention_kwargs = attention_kwargs.copy()
@@ -734,9 +772,7 @@ class AscendWanTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
             scale_lora_layers(self, lora_scale)
         else:
             if attention_kwargs is not None and attention_kwargs.get("scale", None) is not None:
-                logger.warning(
-                    "Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
-                )
+                logger.warning("Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective.")
 
         batch_size, num_channels, num_frames, height, width = hidden_states.shape
         p_t, p_h, p_w = self.config.patch_size

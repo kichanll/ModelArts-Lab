@@ -12,9 +12,9 @@ No sys.modules mocking is needed as we test string operations and shapes.
 """
 
 import math
-import pytest
-import torch
 from unittest.mock import MagicMock
+
+import torch
 
 
 class TestBasicClean:
@@ -23,7 +23,7 @@ class TestBasicClean:
     def test_basic_clean_removes_html_entities(self):
         """Test that HTML entities are unescaped."""
         # Simulating html.unescape behavior
-        text = "test&amp;prompt"
+        text = "test&amp;prompt"  # noqa: F841
         # html.unescape would convert &amp; to &
         result = "test&prompt"
         assert "&" in result
@@ -42,12 +42,14 @@ class TestWhitespaceClean:
         """Test that multiple spaces are collapsed to single space."""
         text = "test   prompt   here"
         import re
+
         result = re.sub(r"\s+", " ", text)
         assert result == "test prompt here"
 
     def test_whitespace_clean_strips(self):
         """Test that result is stripped."""
         import re
+
         text = "  test  "
         result = re.sub(r"\s+", " ", text).strip()
         assert result == "test"
@@ -59,6 +61,7 @@ class TestPromptClean:
     def test_prompt_clean_combines_functions(self):
         """Test that prompt_clean applies both basic and whitespace clean."""
         import re
+
         text = "  test   prompt  "
         result = re.sub(r"\s+", " ", text.strip()).strip()
         assert result == "test prompt"
@@ -151,13 +154,13 @@ class TestGuidanceScale:
         """Test CFG is enabled when guidance_scale > 1."""
         _guidance_scale = 5.0
         do_cfg = _guidance_scale > 1
-        assert do_cfg == True
+        assert do_cfg == True  # noqa: E712
 
     def test_do_classifier_free_guidance_false(self):
         """Test CFG is disabled when guidance_scale <= 1."""
         _guidance_scale = 1.0
         do_cfg = _guidance_scale > 1
-        assert do_cfg == False
+        assert do_cfg == False  # noqa: E712
 
 
 class TestTimestepProperties:
@@ -176,7 +179,7 @@ class TestTimestepProperties:
     def test_interrupt_property(self):
         """Test interrupt property."""
         _interrupt = False
-        assert _interrupt == False
+        assert _interrupt == False  # noqa: E712
 
 
 class TestLatentShapeCalculations:
@@ -215,7 +218,7 @@ class TestBoundaryTimestepLogic:
         current_timestep = 900.0
 
         is_high_noise = current_timestep >= boundary_timestep
-        assert is_high_noise == True
+        assert is_high_noise == True  # noqa: E712
 
     def test_low_noise_stage(self):
         """Test low noise stage detection."""
@@ -223,7 +226,7 @@ class TestBoundaryTimestepLogic:
         current_timestep = 800.0
 
         is_high_noise = current_timestep >= boundary_timestep
-        assert is_high_noise == False
+        assert is_high_noise == False  # noqa: E712
 
 
 class TestConditioningIndices:
@@ -304,7 +307,7 @@ class TestExpandTimesteps:
         else:
             first_frame_mask_created = False
 
-        assert first_frame_mask_created == True
+        assert first_frame_mask_created == True  # noqa: E712
 
 
 class TestOutputProcessing:
@@ -314,22 +317,22 @@ class TestOutputProcessing:
         """Test output_type='latent' skips VAE decode."""
         output_type = "latent"
         skip_vae = output_type == "latent"
-        assert skip_vae == True
+        assert skip_vae == True  # noqa: E712
 
     def test_output_type_np(self):
         """Test output_type='np' processes through VAE."""
         output_type = "np"
         skip_vae = output_type == "latent"
-        assert skip_vae == False
+        assert skip_vae == False  # noqa: E712
 
     def test_return_dict_true(self):
         """Test return_dict=True returns WanPipelineOutput."""
         return_dict = True
         # Would return WanPipelineOutput(frames=video)
-        assert return_dict == True
+        assert return_dict == True  # noqa: E712
 
     def test_return_dict_false(self):
         """Test return_dict=False returns tuple."""
         return_dict = False
         # Would return (video,)
-        assert return_dict == False
+        assert return_dict == False  # noqa: E712

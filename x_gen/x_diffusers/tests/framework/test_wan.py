@@ -11,9 +11,7 @@ Note: These tests verify standalone logic without importing the actual module.
 No sys.modules mocking is needed as we test mathematical operations and shapes.
 """
 
-import pytest
 import torch
-import math
 
 
 class TestAscendWanAttnProcessor2_0:
@@ -61,8 +59,8 @@ class TestAttentionCall:
         # Simulate projection to Q, K, V
         # In reality, these go through linear layers
         query = hidden_states  # Simplified
-        key = hidden_states
-        value = hidden_states
+        key = hidden_states  # noqa: F841
+        value = hidden_states  # noqa: F841
 
         assert query.shape == (batch_size, seq_len, hidden_dim)
 
@@ -117,7 +115,7 @@ class TestParallelManager:
 
         # This would raise ValueError in actual code
         divisible = heads % sp_size == 0
-        assert divisible == False
+        assert divisible == False  # noqa: E712
 
     def test_all_to_all_before_attn(self):
         """Test all-to-all communication before attention."""
@@ -176,7 +174,7 @@ class TestWanTransformerConfig:
         num_attention_heads = 40
         attention_head_dim = 128
         in_channels = 16
-        out_channels = 16
+        out_channels = 16  # noqa: F841
         ffn_dim = 13824
 
         assert patch_size == (1, 2, 2)
@@ -206,7 +204,7 @@ class TestRotaryEmbedding:
     def test_rope_frequency_calculation(self):
         """Test RoPE frequency calculation."""
         head_dim = 128
-        max_seq_len = 1024
+        max_seq_len = 1024  # noqa: F841
 
         # Frequencies: 1 / (10000^(2i/d))
         freqs = 1.0 / (10000 ** (torch.arange(0, head_dim, 2).float() / head_dim))
@@ -224,9 +222,7 @@ class TestLayerNorm:
         hidden_states = torch.randn(1, 131040, 64)
 
         # FP32LayerNorm computes in float32
-        normalized = torch.nn.functional.layer_norm(
-            hidden_states.float(), [64]
-        )
+        normalized = torch.nn.functional.layer_norm(hidden_states.float(), [64])
 
         assert normalized.dtype == torch.float32
         assert normalized.shape == hidden_states.shape

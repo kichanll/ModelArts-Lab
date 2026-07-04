@@ -1,8 +1,7 @@
 import torch
-import torch_npu
 import torch.distributed as dist
+import torch_npu
 from torch.distributed import ProcessGroup
-from typing import List, Optional, Union
 
 
 class GroupCoordinator:
@@ -17,20 +16,17 @@ class GroupCoordinator:
     device_group: ProcessGroup  # group for device communication
 
     def __init__(
-            self,
-            group_ranks: List[List[int]],
-            local_rank: int,
+        self,
+        group_ranks: list[list[int]],
+        local_rank: int,
     ):
-
         self.rank = torch.distributed.get_rank()
         self.local_rank = local_rank
         self.device_group = None
         self.cpu_group = None
 
         for ranks in group_ranks:
-            device_group = torch.distributed.new_group(
-                ranks, backend="hccl"
-            )
+            device_group = torch.distributed.new_group(ranks, backend="hccl")
             # a group with `gloo` backend, to allow direct coordination between
             # processes through the CPU.
             cpu_group = torch.distributed.new_group(ranks, backend="gloo")
@@ -66,17 +62,13 @@ class GroupCoordinator:
             return input_
         else:
             torch.distributed.all_to_all_single(
-                output_,
-                input_,
-                output_split_sizes=recv_sizes,
-                input_split_sizes=send_sizes,
-                group=self.device_group
+                output_, input_, output_split_sizes=recv_sizes, input_split_sizes=send_sizes, group=self.device_group
             )
             return output_
 
     def all_gather(
-            self, input_: torch.Tensor, dim: int = 0, separate_tensors: bool = False
-    ) -> Union[torch.Tensor, List[torch.Tensor]]:
+        self, input_: torch.Tensor, dim: int = 0, separate_tensors: bool = False
+    ) -> torch.Tensor | list[torch.Tensor]:
         world_size = self.world_size
         # Bypass the function if we are using only 1 GPU.
         if world_size == 1:
@@ -90,24 +82,23 @@ class GroupCoordinator:
         # Allocate output tensor.
         input_size = list(input_.size())
         input_size[0] *= world_size
-        output_tensor = torch.empty(
-            input_size, dtype=input_.dtype, device=input_.device
-        )
+        output_tensor = torch.empty(input_size, dtype=input_.dtype, device=input_.device)
 
         # All-gather.
-        torch.distributed.all_gather_into_tensor(
-            output_tensor, input_, group=self.device_group
-        )
+        torch.distributed.all_gather_into_tensor(output_tensor, input_, group=self.device_group)
         if dim != 0:
             input_size[0] //= world_size
-            output_tensor = output_tensor.reshape([world_size, ] + input_size)
+            output_tensor = output_tensor.reshape(
+                [
+                    world_size,
+                ]
+                + input_size
+            )
             output_tensor = output_tensor.movedim(0, dim)
 
         if separate_tensors:
             tensor_list = [
-                output_tensor.view(-1)
-                .narrow(0, input_.numel() * i, input_.numel())
-                .view_as(input_)
+                output_tensor.view(-1).narrow(0, input_.numel() * i, input_.numel()).view_as(input_)
                 for i in range(world_size)
             ]
             return tensor_list
@@ -119,9 +110,9 @@ class GroupCoordinator:
             return output_tensor
 
 
-_TP: Optional[GroupCoordinator] = None
-_EP: Optional[GroupCoordinator] = None
-_CFG: Optional[GroupCoordinator] = None
+_TP: GroupCoordinator | None = None
+_EP: GroupCoordinator | None = None
+_CFG: GroupCoordinator | None = None
 
 
 def init_TP(tp_size):
@@ -227,4 +218,3 @@ def get_cfg_parallel_world_size():
 def get_cfg_parallel_rank():
     """Return my rank for the cfg model parallel group."""
     return get_cfg_group().rank_in_group
-

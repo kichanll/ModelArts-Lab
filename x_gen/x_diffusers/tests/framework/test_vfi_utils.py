@@ -23,24 +23,26 @@ class TestInterpolationStateList:
         is_skip_list = True
 
         # Create state list
-        state_list = type('InterpolationStateList', (), {
-            'frame_indices': frame_indices,
-            'is_skip_list': is_skip_list
-        })()
+        state_list = type(
+            "InterpolationStateList", (), {"frame_indices": frame_indices, "is_skip_list": is_skip_list}
+        )()
 
         assert state_list.frame_indices == [0, 2, 4]
-        assert state_list.is_skip_list == True
+        assert state_list.is_skip_list == True  # noqa: E712
 
-    @pytest.mark.parametrize("is_skip_list,frame_index,expected", [
-        # is_skip_list=True: Frame in list -> skip, Frame not in list -> not skip
-        (True, 0, True),   # In list, skip_list=True -> skip
-        (True, 1, False),  # Not in list, skip_list=True -> not skip
-        (True, 2, True),   # In list, skip_list=True -> skip
-        # is_skip_list=False: Frame in list -> not skip, Frame not in list -> skip
-        (False, 0, False),  # In list, skip_list=False -> not skip
-        (False, 1, True),   # Not in list, skip_list=False -> skip
-        (False, 2, False),  # In list, skip_list=False -> not skip
-    ])
+    @pytest.mark.parametrize(
+        "is_skip_list,frame_index,expected",
+        [
+            # is_skip_list=True: Frame in list -> skip, Frame not in list -> not skip
+            (True, 0, True),  # In list, skip_list=True -> skip
+            (True, 1, False),  # Not in list, skip_list=True -> not skip
+            (True, 2, True),  # In list, skip_list=True -> skip
+            # is_skip_list=False: Frame in list -> not skip, Frame not in list -> skip
+            (False, 0, False),  # In list, skip_list=False -> not skip
+            (False, 1, True),  # Not in list, skip_list=False -> skip
+            (False, 2, False),  # In list, skip_list=False -> not skip
+        ],
+    )
     def test_is_frame_skipped(self, is_skip_list, frame_index, expected):
         """Test is_frame_skipped with parameterized skip_list mode."""
         frame_indices = [0, 2, 4]
@@ -75,14 +77,17 @@ class TestGenericFrameLoop:
         assert denormalized.min() >= -1
         assert denormalized.max() <= 1
 
-    @pytest.mark.parametrize("num_input_frames,multiplier,expected_output", [
-        (5, 2, 9),   # 5 + 4 * 1 = 9
-        (5, 3, 13),  # 5 + 4 * 2 = 13
-        (5, 4, 17),  # 5 + 4 * 3 = 17
-        (3, 2, 5),   # 3 + 2 * 1 = 5
-        (3, 3, 7),   # 3 + 2 * 2 = 7
-        (10, 2, 19), # 10 + 9 * 1 = 19
-    ])
+    @pytest.mark.parametrize(
+        "num_input_frames,multiplier,expected_output",
+        [
+            (5, 2, 9),  # 5 + 4 * 1 = 9
+            (5, 3, 13),  # 5 + 4 * 2 = 13
+            (5, 4, 17),  # 5 + 4 * 3 = 17
+            (3, 2, 5),  # 3 + 2 * 1 = 5
+            (3, 3, 7),  # 3 + 2 * 2 = 7
+            (10, 2, 19),  # 10 + 9 * 1 = 19
+        ],
+    )
     def test_multiplier_range(self, num_input_frames, multiplier, expected_output):
         """Test multiplier determines output frame count with various input combinations."""
         actual_output = num_input_frames + (num_input_frames - 1) * (multiplier - 1)
@@ -118,9 +123,9 @@ class TestSkipLogic:
             should_process = (is_skip and skip % 2 == 0) or not is_skip
 
             if skip % 2 == 0:
-                assert should_process == True
+                assert should_process == True  # noqa: E712
             else:
-                assert should_process == False
+                assert should_process == False  # noqa: E712
 
     def test_is_skip_false_processes_all(self):
         """Test is_skip=False processes all frames."""
@@ -128,7 +133,7 @@ class TestSkipLogic:
 
         for skip in range(10):
             should_process = (is_skip and skip % 2 == 0) or not is_skip
-            assert should_process == True
+            assert should_process == True  # noqa: E712
 
 
 class TestFramePairing:
@@ -140,8 +145,8 @@ class TestFramePairing:
         frame_itr = 0
         batch_size = 1
 
-        frame0 = frames[frame_itr:frame_itr + batch_size]
-        frame1 = frames[frame_itr + 1:frame_itr + 1 + batch_size]
+        frame0 = frames[frame_itr : frame_itr + batch_size]
+        frame1 = frames[frame_itr + 1 : frame_itr + 1 + batch_size]
 
         assert frame0.shape == (1, 3, 480, 832)
         assert frame1.shape == (1, 3, 480, 832)
@@ -152,8 +157,8 @@ class TestFramePairing:
         frame_itr = 4  # Last pair
         batch_size = 2
 
-        frame0 = frames[frame_itr:frame_itr + batch_size]
-        frame1 = frames[frame_itr + 1:frame_itr + 1 + batch_size]
+        frame0 = frames[frame_itr : frame_itr + batch_size]
+        frame1 = frames[frame_itr + 1 : frame_itr + 1 + batch_size]
 
         # frame1 would be smaller, needs padding
         if frame0.shape[0] != frame1.shape[0]:
@@ -168,7 +173,7 @@ class TestNonTimestepInference:
     def test_recursive_inference_n1(self):
         """Test recursive inference with n=1 returns single middle frame."""
         # When n == 1, returns [middle_frame] interpolated at t=0.5
-        n = 1
+        n = 1  # noqa: F841
 
         frame0 = torch.randn(1, 3, 480, 832)
         frame1 = torch.randn(1, 3, 480, 832)
@@ -182,7 +187,7 @@ class TestNonTimestepInference:
     def test_recursive_inference_n2(self):
         """Test recursive inference with n=2 returns two middle frames."""
         # n=2 returns [first_middle at t=0.25, second_middle at t=0.75]
-        n = 2
+        n = 2  # noqa: F841
 
         frame0 = torch.randn(1, 3, 480, 832)
         frame1 = torch.randn(1, 3, 480, 832)
@@ -207,9 +212,9 @@ class TestOutputFrameConstruction:
         middle_frames = [torch.randn(1, 3, 480, 832) for _ in range(2)]
 
         for idx in range(1):
-            output_frames.append(frame0[idx:idx + 1])
+            output_frames.append(frame0[idx : idx + 1])
             for mid_frame in middle_frames:
-                output_frames.append(mid_frame[idx:idx + 1])
+                output_frames.append(mid_frame[idx : idx + 1])
 
         assert len(output_frames) == 3  # 1 + 2 middle frames
 
@@ -218,7 +223,7 @@ class TestOutputFrameConstruction:
         frames = torch.randn(5, 3, 480, 832)
         output_frames = [torch.randn(1, 3, 480, 832) for _ in range(4)]
 
-        final_frame = (frames[-1:] * 2 - 1)
+        final_frame = frames[-1:] * 2 - 1
         output_frames.append(final_frame)
 
         assert len(output_frames) == 5

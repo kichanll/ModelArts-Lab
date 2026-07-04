@@ -1,25 +1,25 @@
-from typing import Optional, Tuple, Union
-
 import torch
-import torch.nn as nn
 import torch.distributed as dist
+import torch.nn as nn
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.models.autoencoders import autoencoder_kl_hunyuan_video
 from diffusers.models.autoencoders.autoencoder_kl_hunyuan_video import (
-    HunyuanVideoEncoder3D,
     HunyuanVideoDecoder3D,
+    HunyuanVideoEncoder3D,
 )
 from diffusers.models.autoencoders.vae import DecoderOutput, DiagonalGaussianDistribution
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.utils.accelerate_utils import apply_forward_hook
-
 from x_base.utils.infer_info import infer_info
-from x_base.vae_parallelism.vae_mgr import (
-    blend_t, parallel_spatial_tiled_decode, temporal_tiled_decode,
-    tiled_decode_parallel, tiled_encode_parallel
-)
 from x_base.vae_parallelism.utils import enable_lightning
+from x_base.vae_parallelism.vae_mgr import (
+    blend_t,
+    parallel_spatial_tiled_decode,
+    temporal_tiled_decode,
+    tiled_decode_parallel,
+    tiled_encode_parallel,
+)
 
 
 class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
@@ -35,30 +35,30 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            in_channels: int = 3,
-            out_channels: int = 3,
-            latent_channels: int = 16,
-            down_block_types: Tuple[str, ...] = (
-                    "HunyuanVideoDownBlock3D",
-                    "HunyuanVideoDownBlock3D",
-                    "HunyuanVideoDownBlock3D",
-                    "HunyuanVideoDownBlock3D",
-            ),
-            up_block_types: Tuple[str, ...] = (
-                    "HunyuanVideoUpBlock3D",
-                    "HunyuanVideoUpBlock3D",
-                    "HunyuanVideoUpBlock3D",
-                    "HunyuanVideoUpBlock3D",
-            ),
-            block_out_channels: Tuple[int] = (128, 256, 512, 512),
-            layers_per_block: int = 2,
-            act_fn: str = "silu",
-            norm_num_groups: int = 32,
-            scaling_factor: float = 0.476986,
-            spatial_compression_ratio: int = 8,
-            temporal_compression_ratio: int = 4,
-            mid_block_add_attention: bool = True,
+        self,
+        in_channels: int = 3,
+        out_channels: int = 3,
+        latent_channels: int = 16,
+        down_block_types: tuple[str, ...] = (
+            "HunyuanVideoDownBlock3D",
+            "HunyuanVideoDownBlock3D",
+            "HunyuanVideoDownBlock3D",
+            "HunyuanVideoDownBlock3D",
+        ),
+        up_block_types: tuple[str, ...] = (
+            "HunyuanVideoUpBlock3D",
+            "HunyuanVideoUpBlock3D",
+            "HunyuanVideoUpBlock3D",
+            "HunyuanVideoUpBlock3D",
+        ),
+        block_out_channels: tuple[int] = (128, 256, 512, 512),
+        layers_per_block: int = 2,
+        act_fn: str = "silu",
+        norm_num_groups: int = 32,
+        scaling_factor: float = 0.476986,
+        spatial_compression_ratio: int = 8,
+        temporal_compression_ratio: int = 4,
+        mid_block_add_attention: bool = True,
     ) -> None:
         super().__init__()
 
@@ -108,7 +108,7 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         self.use_tiling = False
 
         # When decoding temporally long video latents, the memory requirement is very high. By decoding latent frames
-        # at a fixed frame batch size (based on `self.tile_sample_min_num_frames`), the memory requirement can be lowered.
+        # at a fixed frame batch size (based on `self.tile_sample_min_num_frames`), the memory requirement can be lowered.  # noqa: E501
         self.use_framewise_encoding = True
         self.use_framewise_decoding = True
 
@@ -135,13 +135,13 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         self.tile_overlap_factor = 0.25
 
     def enable_tiling(
-            self,
-            tile_sample_min_height: Optional[int] = None,
-            tile_sample_min_width: Optional[int] = None,
-            tile_sample_min_num_frames: Optional[int] = None,
-            tile_sample_stride_height: Optional[float] = None,
-            tile_sample_stride_width: Optional[float] = None,
-            tile_sample_stride_num_frames: Optional[float] = None,
+        self,
+        tile_sample_min_height: int | None = None,
+        tile_sample_min_width: int | None = None,
+        tile_sample_min_num_frames: int | None = None,
+        tile_sample_stride_height: float | None = None,
+        tile_sample_stride_width: float | None = None,
+        tile_sample_stride_num_frames: float | None = None,
     ) -> None:
         r"""
         Enable tiled VAE decoding. When this option is enabled, the VAE will split the input tensor into tiles to
@@ -213,8 +213,8 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
 
     @apply_forward_hook
     def encode(
-            self, x: torch.Tensor, return_dict: bool = True
-    ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
+        self, x: torch.Tensor, return_dict: bool = True
+    ) -> AutoencoderKLOutput | tuple[DiagonalGaussianDistribution]:
         r"""
         Encode a batch of images into latents.
 
@@ -239,7 +239,7 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
             return (posterior,)
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> DecoderOutput | torch.Tensor:
         batch_size, num_channels, num_frames, height, width = z.shape
         tile_latent_min_height = self.tile_sample_min_height // self.spatial_compression_ratio
         tile_latent_min_width = self.tile_sample_min_width // self.spatial_compression_ratio
@@ -267,7 +267,7 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         return DecoderOutput(sample=dec)
 
     @apply_forward_hook
-    def decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+    def decode(self, z: torch.Tensor, return_dict: bool = True) -> DecoderOutput | torch.Tensor:
         r"""
         Decode a batch of images.
 
@@ -306,15 +306,15 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
             sample_end = min(i + self.tile_sample_min_tsize + 1, T)
             tile = x[:, :, i:sample_end, :, :]
 
-            if self.use_tiling and (H > self.tile_sample_min_height or W > self.tile_sample_min_width):
+            if self.use_tiling and (self.tile_sample_min_height < H or self.tile_sample_min_width < W):
                 z_tile = self._tiled_encode_parallel(tile)
             else:
                 z_tile = self.quant_conv(self.encoder(tile))
 
             Tz = z_tile.shape[2]
             curr_blend = min(blend_extent_default // latent_ratio, Tz - 1)
-            is_first = (i == 0)
-            is_last = (sample_end == T)
+            is_first = i == 0
+            is_last = sample_end == T
 
             if not is_first:
                 z_tile = z_tile[:, :, 1:, :, :]
@@ -334,7 +334,6 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         return enc
 
     def _tiled_encode_parallel(self, x: torch.Tensor) -> torch.Tensor:
-
         # TODO: Disabled for world_size=8, as a different tile partitioning is required.
         # Partition matching also does not give performance gain over synchronous mode
         # due to long communication time.
@@ -374,12 +373,12 @@ class AutoencoderKLHunyuanVideo(ModelMixin, ConfigMixin):
         return enc[:, :, :, :latent_height, :latent_width]
 
     def forward(
-            self,
-            sample: torch.Tensor,
-            sample_posterior: bool = False,
-            return_dict: bool = True,
-            generator: Optional[torch.Generator] = None,
-    ) -> Union[DecoderOutput, torch.Tensor]:
+        self,
+        sample: torch.Tensor,
+        sample_posterior: bool = False,
+        return_dict: bool = True,
+        generator: torch.Generator | None = None,
+    ) -> DecoderOutput | torch.Tensor:
         r"""
         Args:
             sample (`torch.Tensor`): Input sample.

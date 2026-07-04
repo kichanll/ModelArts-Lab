@@ -9,10 +9,11 @@ Note: These tests verify standalone logic without importing the actual module.
 No sys.modules mocking is needed as we test mathematical operations and shapes.
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 import torch
 import torch.nn as nn
-from unittest.mock import MagicMock
 
 
 class TestAscendWanVACETransformerBlock:
@@ -22,6 +23,7 @@ class TestAscendWanVACETransformerBlock:
         """Test initialization with default parameters."""
         try:
             from x_diffusers.framework.transformer.wan_vace import AscendWanVACETransformerBlock
+
             assert AscendWanVACETransformerBlock is not None
         except ImportError:
             pytest.skip("AscendWanVACETransformerBlock not available")
@@ -50,6 +52,7 @@ class TestAscendWanVACETransformerBlock:
         """Test scale_shift_table parameter in transformer block."""
         try:
             from x_diffusers.framework.transformer.wan_vace import AscendWanVACETransformerBlock
+
             assert AscendWanVACETransformerBlock is not None
         except ImportError:
             pytest.skip("AscendWanVACETransformerBlock not available")
@@ -94,7 +97,7 @@ class TestForwardPass:
     def test_forward_cross_attention(self):
         """Test cross-attention in forward."""
         hidden_states = torch.randn(1, 100, 1024)
-        encoder_hidden_states = torch.randn(1, 256, 1024)
+        encoder_hidden_states = torch.randn(1, 256, 1024)  # noqa: F841
 
         # Cross-attention with encoder hidden states
         # Shape preservation check
@@ -131,9 +134,9 @@ class TestAscendWanVACETransformer3DModel:
         num_attention_heads = 40
         attention_head_dim = 128
         in_channels = 16
-        out_channels = 16
+        out_channels = 16  # noqa: F841
         text_dim = 4096
-        freq_dim = 256
+        freq_dim = 256  # noqa: F841
         ffn_dim = 13824
         num_layers = 40
 
@@ -175,7 +178,7 @@ class TestAscendWanVACETransformer3DModel:
         _keep_in_fp32_modules = ["time_embedder", "scale_shift_table", "norm1", "norm2", "norm3"]
         _keys_to_ignore_on_load_unexpected = ["norm_added_q"]
 
-        assert _supports_gradient_checkpointing == True
+        assert _supports_gradient_checkpointing == True  # noqa: E712
         assert len(_skip_layerwise_casting_patterns) == 4
         assert len(_no_split_modules) == 2
 
@@ -207,10 +210,7 @@ class TestConditioningStates:
             from x_diffusers.framework.transformer.wan_vace import AscendWanVACETransformerBlock
 
             dim = 1024
-            block = AscendWanVACETransformerBlock(
-                dim, ffn_dim=4096, num_heads=16,
-                apply_output_projection=False
-            )
+            block = AscendWanVACETransformerBlock(dim, ffn_dim=4096, num_heads=16, apply_output_projection=False)
             assert block is not None
         except ImportError:
             pytest.skip("AscendWanVACETransformerBlock not available")
@@ -236,9 +236,7 @@ class TestLayerNorm:
         hidden_states = torch.randn(1, 100, 1024)
 
         # FP32LayerNorm computes in float32
-        normalized = torch.nn.functional.layer_norm(
-            hidden_states.float(), [1024]
-        )
+        normalized = torch.nn.functional.layer_norm(hidden_states.float(), [1024])
 
         assert normalized.dtype == torch.float32
         assert normalized.shape == hidden_states.shape

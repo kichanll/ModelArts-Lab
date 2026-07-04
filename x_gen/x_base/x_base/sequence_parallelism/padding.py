@@ -3,11 +3,11 @@ Sequence Parallelism - Padding Manager
 
 Padding 管理，替代全局 PAD_DICT。
 """
+
 from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, Optional
 
 import torch.distributed as dist
 from torch.distributed import ProcessGroup
@@ -18,7 +18,8 @@ from .errors import PadNotSetError
 @dataclass
 class PadManager:
     """Padding 管理器"""
-    _pads: Dict[str, int] = field(default_factory=dict)
+
+    _pads: dict[str, int] = field(default_factory=dict)
 
     def set(self, name: str, dim_size: int, sp_size: int) -> int:
         """计算并设置 padding"""
@@ -48,7 +49,7 @@ class PadManager:
 
 
 # 全局实例
-_pad_manager: Optional[PadManager] = None
+_pad_manager: PadManager | None = None
 
 
 def get_pad_manager() -> PadManager:
@@ -60,15 +61,12 @@ def get_pad_manager() -> PadManager:
 
 
 # 向后兼容的全局字典
-PAD_DICT: Dict[str, int] = {}
+PAD_DICT: dict[str, int] = {}
 
 
 def set_pad(name: str, dim_size: int, parallel_group: ProcessGroup) -> int:
     """设置 padding (向后兼容，deprecated)"""
-    warnings.warn(
-        "set_pad() is deprecated. Use PadManager.set_from_group() instead.",
-        DeprecationWarning, stacklevel=2
-    )
+    warnings.warn("set_pad() is deprecated. Use PadManager.set_from_group() instead.", DeprecationWarning, stacklevel=2)
     sp_size = dist.get_world_size(parallel_group)
     pad = (sp_size - (dim_size % sp_size)) % sp_size
     global PAD_DICT
@@ -79,10 +77,7 @@ def set_pad(name: str, dim_size: int, parallel_group: ProcessGroup) -> int:
 
 def get_pad(name: str) -> int:
     """获取 padding (向后兼容，deprecated)"""
-    warnings.warn(
-        "get_pad() is deprecated. Use PadManager.get() instead.",
-        DeprecationWarning, stacklevel=2
-    )
+    warnings.warn("get_pad() is deprecated. Use PadManager.get() instead.", DeprecationWarning, stacklevel=2)
     manager = get_pad_manager()
     if manager.is_set(name):
         return manager.get(name)

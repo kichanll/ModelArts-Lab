@@ -56,42 +56,12 @@ enable_sp(parallel_manager, yunchang_backend)
 # =============================================================================
 # 错误类型
 # =============================================================================
-from .errors import (
-    SequenceParallelError,
-    PadNotSetError,
-    ProcessGroupError,
-    ParallelConfigError,
-    IncompatibleDimensionError,
-    BackendNotAvailableError,
-    AllToAllDimensionError,
-)
-
-# =============================================================================
-# Padding 管理
-# =============================================================================
-from .padding import (
-    PadManager,
-    get_pad_manager,
-    set_pad,  # 向后兼容 (deprecated)
-    get_pad,  # 向后兼容 (deprecated)
-)
-
-# =============================================================================
-# ProcessGroup Mesh
-# =============================================================================
-from .mesh import (
-    ProcessGroupMesh,
-    ParallelManager,
-    ParallelConfig,
-    initialize,
-)
-
 # =============================================================================
 # 通信后端
 # =============================================================================
 from .backend import (
-    CollectiveBackend,
     BaseCommBackend,
+    CollectiveBackend,
     TorchDistBackend,
 )
 
@@ -101,27 +71,55 @@ from .backend import (
 from .comm import (
     # Primitives
     AllGather,
-    ReduceScatter,
-    AllToAllAutograd,
     AllGatherOverlapped,
+    AllToAllAutograd,
+    ReduceScatter,
     all_gather,
-    reduce_scatter,
     all_to_all,
+    all_to_all_4d,
+    all_to_all_after_attn,
+    all_to_all_before_attn,
+    batch_func,
     # Collective
     gather_sequence,
-    split_sequence,
-    all_to_all_4d,
-    all_to_all_before_attn,
-    all_to_all_after_attn,
     pad_tensor,
-    batch_func,
+    reduce_scatter,
+    split_sequence,
+)
+from .errors import (
+    AllToAllDimensionError,
+    BackendNotAvailableError,
+    IncompatibleDimensionError,
+    PadNotSetError,
+    ParallelConfigError,
+    ProcessGroupError,
+    SequenceParallelError,
+)
+
+# =============================================================================
+# ProcessGroup Mesh
+# =============================================================================
+from .mesh import (
+    ParallelConfig,
+    ParallelManager,
+    ProcessGroupMesh,
+    initialize,
+)
+
+# =============================================================================
+# Padding 管理
+# =============================================================================
+from .padding import (
+    PadManager,
+    get_pad,  # 向后兼容 (deprecated)
+    get_pad_manager,
+    set_pad,  # 向后兼容 (deprecated)
 )
 
 # =============================================================================
 # Pipeline 集成
 # =============================================================================
 from .pipeline import enable_sp
-
 
 # =============================================================================
 # __all__
@@ -136,24 +134,20 @@ __all__ = [
     "IncompatibleDimensionError",
     "BackendNotAvailableError",
     "AllToAllDimensionError",
-
     # Padding
     "PadManager",
     "get_pad_manager",
     "set_pad",  # deprecated
     "get_pad",  # deprecated
-
     # Mesh
     "ProcessGroupMesh",
     "ParallelManager",
     "ParallelConfig",
     "initialize",
-
     # Backends
     "CollectiveBackend",
     "BaseCommBackend",
     "TorchDistBackend",
-
     # Primitives
     "AllGather",
     "ReduceScatter",
@@ -162,7 +156,6 @@ __all__ = [
     "all_gather",
     "reduce_scatter",
     "all_to_all",
-
     # Collective
     "gather_sequence",
     "split_sequence",
@@ -171,7 +164,6 @@ __all__ = [
     "all_to_all_after_attn",
     "pad_tensor",
     "batch_func",
-
     # Pipeline
     "enable_sp",
 ]

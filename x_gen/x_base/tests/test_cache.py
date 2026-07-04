@@ -6,11 +6,11 @@ Tests the cache acceleration functionality including:
 - magcache_init() configuration loading
 - teacache_init() initialization
 """
-import pytest
-import numpy as np
-from unittest.mock import patch, MagicMock, call, PropertyMock
-from argparse import Namespace
 
+from argparse import Namespace
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # ============================================================
 # Test data constants
@@ -34,13 +34,13 @@ class TestTurboOnPipe:
     @pytest.mark.parametrize("pipeline_name,adapter_name", PIPELINE_TYPES)
     def test_turbo_on_pipe_pipeline_routing(self, mock_pipe, pipeline_name, adapter_name):
         """Test turbo_on_pipe correctly routes to appropriate adapter."""
+
         from x_base.cache import turbo_on_pipe
-        import importlib
 
         mock_pipe.__class__.__name__ = pipeline_name
         mock_args = Namespace(turbo_mode="faiz")
 
-        with patch('importlib.import_module') as mock_import:
+        with patch("importlib.import_module") as mock_import:
             mock_adapter = MagicMock()
             mock_adapter.teacache_init = MagicMock()
             mock_import.return_value = mock_adapter
@@ -50,8 +50,7 @@ class TestTurboOnPipe:
             # Verify correct adapter module was loaded
             mock_import.assert_called_once()
             call_args = mock_import.call_args
-            assert adapter_name in str(call_args), \
-                f"Expected adapter '{adapter_name}' for pipeline '{pipeline_name}'"
+            assert adapter_name in str(call_args), f"Expected adapter '{adapter_name}' for pipeline '{pipeline_name}'"
             assert result == mock_pipe
 
     def test_turbo_on_pipe_unknown_pipeline(self, mock_pipe):
@@ -121,8 +120,8 @@ class TestTeacacheInit:
 
         # Verify transformer class attributes are set
         assert mock_pipe.transformer.__class__.enable_teacache is True
-        assert hasattr(mock_pipe.transformer.__class__, 'cnt')
-        assert hasattr(mock_pipe.transformer.__class__, 'num_steps')
+        assert hasattr(mock_pipe.transformer.__class__, "cnt")
+        assert hasattr(mock_pipe.transformer.__class__, "num_steps")
 
     def test_teacache_init_t2v_14b(self, mock_pipe, mock_args_wan14b):
         """Test teacache_init for T2V 14B model."""
@@ -162,13 +161,14 @@ class TestTeacacheInit:
 class TestTeacacheInitRealBehavior:
     """Tests that verify actual teacache initialization behavior."""
 
-    @pytest.mark.parametrize("task_type,expected_thresh", [
-        ("t2v", 0.1),   # TURBO_THRESH_T2V default
-        ("i2v", 0.18),  # TURBO_THRESH_I2V default
-    ])
-    def test_teacache_init_threshold_by_task_type(
-        self, mock_pipe, mock_args, task_type, expected_thresh
-    ):
+    @pytest.mark.parametrize(
+        "task_type,expected_thresh",
+        [
+            ("t2v", 0.1),  # TURBO_THRESH_T2V default
+            ("i2v", 0.18),  # TURBO_THRESH_I2V default
+        ],
+    )
+    def test_teacache_init_threshold_by_task_type(self, mock_pipe, mock_args, task_type, expected_thresh):
         """Test that teacache threshold is set correctly based on task type."""
         from x_base.cache.models.wan import teacache_init
 
@@ -176,8 +176,9 @@ class TestTeacacheInitRealBehavior:
         teacache_init(mock_pipe, mock_args)
 
         actual_thresh = mock_pipe.transformer.__class__.teacache_thresh
-        assert actual_thresh == expected_thresh, \
-            f"Expected threshold {expected_thresh} for {task_type}, got {actual_thresh}"
+        assert (
+            actual_thresh == expected_thresh
+        ), f"Expected threshold {expected_thresh} for {task_type}, got {actual_thresh}"
 
     def test_teacache_init_sets_step_counter(self, mock_pipe, mock_args):
         """Test that step counter is properly initialized."""
@@ -205,22 +206,22 @@ class TestTeacacheInitRealBehavior:
 class TestMagcacheInit:
     """Test suite for magcache_init function."""
 
-    @patch('yaml.safe_load')
+    @patch("yaml.safe_load")
     def test_magcache_init_loads_config(self, mock_yaml_load, mock_pipe, mock_args, sample_cache_config):
         """Test that magcache_init loads configuration correctly."""
         mock_yaml_load.return_value = sample_cache_config
 
         from x_base.cache.models.wan import magcache_init
 
-        with patch('builtins.open', MagicMock()):
-            with patch('importlib.resources.files') as mock_resources:
+        with patch("builtins.open", MagicMock()):  # noqa: SIM117
+            with patch("importlib.resources.files") as mock_resources:
                 mock_traversable = MagicMock()
                 mock_traversable.joinpath.return_value.open.return_value.__enter__.return_value = MagicMock()
                 mock_resources.return_value = mock_traversable
 
                 magcache_init(mock_pipe, mock_args)
-        assert hasattr(mock_pipe.transformer.__class__, 'forward')
-        assert hasattr(mock_pipe.transformer.__class__, 'magcache_thresh')
+        assert hasattr(mock_pipe.transformer.__class__, "forward")
+        assert hasattr(mock_pipe.transformer.__class__, "magcache_thresh")
 
 
 class TestMagcacheInitRealBehavior:
@@ -235,33 +236,35 @@ class TestMagcacheInitRealBehavior:
             magcache_init(mock_pipe, mock_args)
 
             # Verify attributes are set
-            assert hasattr(mock_pipe.transformer.__class__, 'magcache_thresh')
-            assert hasattr(mock_pipe.transformer.__class__, 'mag_ratios')
-            assert hasattr(mock_pipe.transformer.__class__, 'K')
-            assert hasattr(mock_pipe.transformer.__class__, 'retention_ratio')
+            assert hasattr(mock_pipe.transformer.__class__, "magcache_thresh")
+            assert hasattr(mock_pipe.transformer.__class__, "mag_ratios")
+            assert hasattr(mock_pipe.transformer.__class__, "K")
+            assert hasattr(mock_pipe.transformer.__class__, "retention_ratio")
         except (FileNotFoundError, KeyError) as e:
             pytest.skip(f"Config file not available or incomplete: {e}")
 
-    @pytest.mark.parametrize("model,model_key", [
-        ("Wan2.1-T2V-1.3B", "wan2.1-t2v-1.3b"),
-        ("Wan2.1-T2V-14B", "wan2.1-t2v-14b"),
-        ("Wan2.2-T2V-A14B", "wan2.2-t2v-A14B"),
-    ])
+    @pytest.mark.parametrize(
+        "model,model_key",
+        [
+            ("Wan2.1-T2V-1.3B", "wan2.1-t2v-1.3b"),
+            ("Wan2.1-T2V-14B", "wan2.1-t2v-14b"),
+            ("Wan2.2-T2V-A14B", "wan2.2-t2v-A14B"),
+        ],
+    )
     def test_magcache_init_model_config_selection(self, mock_pipe, model, model_key):
         """Test that correct config is loaded for each model."""
         # Import real config to verify expected keys exist
         try:
             from importlib import resources
+
             import yaml
 
-            config_package = resources.files('x_base.cache')
-            with config_package.joinpath('cache_config.yaml').open('r', encoding='utf-8') as f:
+            config_package = resources.files("x_base.cache")
+            with config_package.joinpath("cache_config.yaml").open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
-            assert model_key in config["mag_ratios"], \
-                f"Config should have mag_ratios for {model_key}"
-            assert len(config["mag_ratios"][model_key]) > 0, \
-                f"mag_ratios[{model_key}] should not be empty"
+            assert model_key in config["mag_ratios"], f"Config should have mag_ratios for {model_key}"
+            assert len(config["mag_ratios"][model_key]) > 0, f"mag_ratios[{model_key}] should not be empty"
         except (AttributeError, TypeError, FileNotFoundError):
             pytest.skip("Config file not available")
 
@@ -269,20 +272,26 @@ class TestMagcacheInitRealBehavior:
 class TestModelSelection:
     """Test model selection logic with parametrized inputs."""
 
-    @pytest.mark.parametrize("model,expected_key", [
-        ("Wan2.1-T2V-1.3B", "1.3B"),
-        ("Wan2.1-T2V-14B", "14B"),
-        ("Wan2.2-T2V-A14B", "Wan2.2"),
-        ("Wan2.2-I2V-A14B", "Wan2.2"),
-    ])
+    @pytest.mark.parametrize(
+        "model,expected_key",
+        [
+            ("Wan2.1-T2V-1.3B", "1.3B"),
+            ("Wan2.1-T2V-14B", "14B"),
+            ("Wan2.2-T2V-A14B", "Wan2.2"),
+            ("Wan2.2-I2V-A14B", "Wan2.2"),
+        ],
+    )
     def test_model_name_matching(self, model, expected_key):
         """Test that model name matching works correctly."""
         assert expected_key in model, f"{expected_key} should be in {model}"
 
-    @pytest.mark.parametrize("model,resolution,expected_in_key", [
-        ("Wan2.1-I2V-14B", "path/to/480p/model", "480"),
-        ("Wan2.1-I2V-14B", "path/to/720p/model", "720"),
-    ])
+    @pytest.mark.parametrize(
+        "model,resolution,expected_in_key",
+        [
+            ("Wan2.1-I2V-14B", "path/to/480p/model", "480"),
+            ("Wan2.1-I2V-14B", "path/to/720p/model", "720"),
+        ],
+    )
     def test_i2v_resolution_detection(self, model, resolution, expected_in_key):
         """Test I2V resolution detection from path."""
         assert expected_in_key in resolution
@@ -291,10 +300,13 @@ class TestModelSelection:
 class TestTurboModes:
     """Test suite for different turbo modes."""
 
-    @pytest.mark.parametrize("mode,init_func_name", [
-        ("faiz", "teacache_init"),
-        ("next_faiz", "magcache_init"),
-    ])
+    @pytest.mark.parametrize(
+        "mode,init_func_name",
+        [
+            ("faiz", "teacache_init"),
+            ("next_faiz", "magcache_init"),
+        ],
+    )
     def test_active_mode_calls_init(self, mock_pipe, mock_args, mode, init_func_name):
         """Test that active modes call the appropriate init function."""
         from x_base.cache import turbo_on_pipe
@@ -302,7 +314,7 @@ class TestTurboModes:
         mock_args.turbo_mode = mode
         mock_pipe.__class__.__name__ = "WanPipeline"  # Set pipeline type for routing
 
-        with patch(f'x_base.cache.models.wan.{init_func_name}') as mock_init:
+        with patch(f"x_base.cache.models.wan.{init_func_name}") as mock_init:
             result = turbo_on_pipe(mock_pipe, mock_args)
             mock_init.assert_called_once_with(mock_pipe, mock_args)
             assert result == mock_pipe
@@ -338,33 +350,36 @@ class TestMagcacheConfigLoading:
 
         # Verify resources module is available
         assert resources is not None
-        assert hasattr(resources, 'files'), "Python 3.9+ should have resources.files"
+        assert hasattr(resources, "files"), "Python 3.9+ should have resources.files"
 
     def test_config_fallback_for_python37(self):
         """Test fallback config loading for Python 3.7-3.8."""
         from importlib import resources
 
         try:
-            config_package = resources.files('x_base.cache')
-            config_file = config_package.joinpath('cache_config.yaml')
+            config_package = resources.files("x_base.cache")
+            config_file = config_package.joinpath("cache_config.yaml")
             assert config_file.exists(), "cache_config.yaml should exist"
         except (AttributeError, TypeError):
             # Python 3.7-3.8 fallback
-            import x_base.cache as config_module
             import os
-            config_path = os.path.join(os.path.dirname(config_module.__file__), 'cache_config.yaml')
+
+            import x_base.cache as config_module
+
+            config_path = os.path.join(os.path.dirname(config_module.__file__), "cache_config.yaml")
 
             assert config_path is not None
-            assert 'cache_config.yaml' in config_path
+            assert "cache_config.yaml" in config_path
 
     def test_real_config_file_loadable(self):
         """Verify real config file can be loaded."""
         from importlib import resources
+
         import yaml
 
         try:
-            config_package = resources.files('x_base.cache')
-            with config_package.joinpath('cache_config.yaml').open('r', encoding='utf-8') as f:
+            config_package = resources.files("x_base.cache")
+            with config_package.joinpath("cache_config.yaml").open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             assert config is not None

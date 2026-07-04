@@ -9,20 +9,22 @@ This module provides comprehensive mocks for:
 Usage:
     Import this in conftest.py or use pytest_plugins to auto-load.
 """
-import pytest
-import sys
-import torch
-from unittest.mock import MagicMock, Mock, patch, create_autospec
-from typing import Optional, Tuple, Any
-from contextlib import contextmanager
 
+import sys
+from contextlib import contextmanager
+from unittest.mock import MagicMock, patch
+
+import pytest
+import torch
 
 # ============================================================
 # Mock Classes
 # ============================================================
 
+
 class MockNPUStream:
     """Mock for torch.npu.Stream"""
+
     def __init__(self, device=None, priority=0):
         self.device = device
         self.priority = priority
@@ -36,6 +38,7 @@ class MockNPUStream:
 
 class MockNPUEvent:
     """Mock for torch.npu.Event"""
+
     def __init__(self, enable_timing=False, blocking=False, interprocess=False):
         self.enable_timing = enable_timing
         self.blocking = blocking
@@ -121,7 +124,7 @@ class MockAttentionManager:
         """Mock attention computation using standard scaled dot product."""
         # Simple scaled dot product attention for testing
         d_k = query.shape[-1]
-        scores = torch.matmul(query, key.transpose(-2, -1)) / (d_k ** 0.5)
+        scores = torch.matmul(query, key.transpose(-2, -1)) / (d_k**0.5)
         if attn_mask is not None:
             scores = scores + attn_mask
         attn_weights = torch.softmax(scores, dim=-1)
@@ -205,7 +208,7 @@ def set_phaa_enabled(enabled: bool):
     _phaa_enabled = enabled
 
 
-def set_phaa_split_num(num: Optional[int]):
+def set_phaa_split_num(num: int | None):
     global _phaa_split_num
     _phaa_split_num = num
 
@@ -218,6 +221,7 @@ def set_pad_value(value: int):
 # ============================================================
 # x_base Function Mocks
 # ============================================================
+
 
 def mock_gather_sequence(tensor, dim=2, group=None):
     """Mock gather_sequence - identity for single process."""
@@ -275,13 +279,14 @@ def mock_get_phaa_split_num():
 # Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def mock_torch_npu():
     """Fixture to mock torch_npu module."""
-    with patch.dict(sys.modules, {'torch_npu': MockNPUModule()}):
-        with patch.dict(sys.modules, {'torch_npu.contrib': MagicMock()}):
-            with patch.dict(sys.modules, {'torch_npu.contrib.transfer_to_npu': MagicMock()}):
-                yield sys.modules['torch_npu']
+    with patch.dict(sys.modules, {"torch_npu": MockNPUModule()}):  # noqa: SIM117
+        with patch.dict(sys.modules, {"torch_npu.contrib": MagicMock()}):
+            with patch.dict(sys.modules, {"torch_npu.contrib.transfer_to_npu": MagicMock()}):
+                yield sys.modules["torch_npu"]
 
 
 @pytest.fixture
@@ -290,7 +295,7 @@ def mock_torch_npu_on_tensor():
     mock_npu = MockNPUModule()
 
     # Create a mock that can be accessed via torch.npu
-    with patch.object(torch, 'npu', mock_npu):
+    with patch.object(torch, "npu", mock_npu):
         yield mock_npu
 
 
@@ -315,25 +320,21 @@ def mock_x_base():
     mock_module.attention_manager = MockAttentionManager()
     mock_module.rope_manager = MockRopeManager()
 
-    with patch.dict(sys.modules, {'x_base': mock_module}):
+    with patch.dict(sys.modules, {"x_base": mock_module}):
         yield mock_module
 
 
 @pytest.fixture
 def mock_distributed():
     """Fixture to mock torch.distributed for single process."""
-    with patch.object(torch, 'distributed', MockDistModule):
+    with patch.object(torch, "distributed", MockDistModule):
         yield MockDistModule
 
 
 @pytest.fixture
 def mock_all_npu(mock_torch_npu, mock_x_base, mock_distributed):
     """Combined fixture that mocks all NPU-related modules."""
-    return {
-        'torch_npu': mock_torch_npu,
-        'x_base': mock_x_base,
-        'distributed': mock_distributed
-    }
+    return {"torch_npu": mock_torch_npu, "x_base": mock_x_base, "distributed": mock_distributed}
 
 
 @pytest.fixture
@@ -348,16 +349,17 @@ def enable_phaa():
 # Context Managers for Selective Mocking
 # ============================================================
 
+
 @contextmanager
 def npu_mock_context():
     """Context manager for NPU mocking in imports."""
     # Save original modules
-    original_torch_npu = sys.modules.get('torch_npu')
-    original_x_base = sys.modules.get('x_base')
+    original_torch_npu = sys.modules.get("torch_npu")
+    original_x_base = sys.modules.get("x_base")
 
     try:
         # Apply mocks
-        sys.modules['torch_npu'] = MockNPUModule()
+        sys.modules["torch_npu"] = MockNPUModule()
         mock_x_base_module = MagicMock()
         mock_x_base_module.gather_sequence = mock_gather_sequence
         mock_x_base_module.split_sequence = mock_split_sequence
@@ -371,28 +373,26 @@ def npu_mock_context():
         mock_x_base_module.ParallelManager = MockParallelManager
         mock_x_base_module.attention_manager = MockAttentionManager()
         mock_x_base_module.rope_manager = MockRopeManager()
-        sys.modules['x_base'] = mock_x_base_module
+        sys.modules["x_base"] = mock_x_base_module
 
-        yield {
-            'torch_npu': sys.modules['torch_npu'],
-            'x_base': sys.modules['x_base']
-        }
+        yield {"torch_npu": sys.modules["torch_npu"], "x_base": sys.modules["x_base"]}
     finally:
         # Restore original modules
         if original_torch_npu is not None:
-            sys.modules['torch_npu'] = original_torch_npu
-        elif 'torch_npu' in sys.modules:
-            del sys.modules['torch_npu']
+            sys.modules["torch_npu"] = original_torch_npu
+        elif "torch_npu" in sys.modules:
+            del sys.modules["torch_npu"]
 
         if original_x_base is not None:
-            sys.modules['x_base'] = original_x_base
-        elif 'x_base' in sys.modules:
-            del sys.modules['x_base']
+            sys.modules["x_base"] = original_x_base
+        elif "x_base" in sys.modules:
+            del sys.modules["x_base"]
 
 
 # ============================================================
 # Helper Functions for Tests
 # ============================================================
+
 
 def create_mock_attention_processor(heads=40, head_dim=128, sp_size=1):
     """Create a mock Attention processor for testing."""
@@ -405,8 +405,10 @@ def create_mock_attention_processor(heads=40, head_dim=128, sp_size=1):
     attn.to_q = MagicMock(return_value=torch.randn(1, 100, heads * head_dim))
     attn.to_k = MagicMock(return_value=torch.randn(1, 100, heads * head_dim))
     attn.to_v = MagicMock(return_value=torch.randn(1, 100, heads * head_dim))
-    attn.to_out = [MagicMock(return_value=torch.randn(1, 100, heads * head_dim)),
-                   MagicMock(return_value=torch.randn(1, 100, heads * head_dim))]
+    attn.to_out = [
+        MagicMock(return_value=torch.randn(1, 100, heads * head_dim)),
+        MagicMock(return_value=torch.randn(1, 100, heads * head_dim)),
+    ]
 
     # Mock norms
     attn.norm_q = MagicMock(side_effect=lambda x: x)

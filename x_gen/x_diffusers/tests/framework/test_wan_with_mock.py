@@ -3,27 +3,29 @@ Integration tests for x_diffusers.framework.transformer.wan module with NPU mock
 
 These tests import the actual module and test real code paths with mocked NPU operations.
 """
+
+import sys
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
 import torch
-import sys
-from unittest.mock import MagicMock, patch, Mock
 
 # Import NPU mocks from conftest
-from tests.conftest import (
-    MockNPUModule, MockAttentionManager, MockRopeManager, MockParallelManager,
-    npu_mock_context
-)
+from tests.conftest import MockAttentionManager, MockNPUModule, MockParallelManager, MockRopeManager
 
 
 # Define mock functions locally
 def mock_gather_sequence(tensor, dim=2, group=None):
     return tensor
 
+
 def mock_split_sequence(tensor, dim=2, group=None):
     return tensor
 
+
 def mock_all_to_all_before_attn(tensor, group, scatter_dim=2, gather_dim=1):
     return tensor
+
 
 def mock_all_to_all_after_attn(tensor, group, scatter_dim=1, gather_dim=2):
     return tensor
@@ -32,7 +34,7 @@ def mock_all_to_all_after_attn(tensor, group, scatter_dim=1, gather_dim=2):
 @pytest.fixture(scope="function")
 def setup_npu_mocks():
     """Shared fixture for NPU mock setup."""
-    npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+    npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
     npu_patcher.start()
 
     mock_x_base = MagicMock()
@@ -49,10 +51,10 @@ def setup_npu_mocks():
     mock_x_base.get_phaa_split_num = Mock(return_value=None)
     mock_x_base.is_phaa_enabled = Mock(return_value=False)
 
-    x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+    x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
     x_base_patcher.start()
 
-    torch_npu_patcher = patch.object(torch, 'npu', MockNPUModule())
+    torch_npu_patcher = patch.object(torch, "npu", MockNPUModule())
     torch_npu_patcher.start()
 
     yield
@@ -102,7 +104,7 @@ class TestAscendWanAttnProcessorWithMock:
         encoder_hidden_states = torch.randn(batch_size, seq_len, hidden_dim)
 
         # Mock QKV projections
-        with patch('x_diffusers.framework.transformer.wan._get_qkv_projections') as mock_qkv:
+        with patch("x_diffusers.framework.transformer.wan._get_qkv_projections") as mock_qkv:
             query = torch.randn(batch_size, seq_len, hidden_dim)
             key = torch.randn(batch_size, seq_len, hidden_dim)
             value = torch.randn(batch_size, seq_len, hidden_dim)
@@ -133,7 +135,7 @@ class TestAscendWanAttnProcessorWithMock:
         encoder_hidden_states_img = torch.randn(batch_size, 512, hidden_dim)
 
         # Mock _get_added_kv_projections
-        with patch('x_diffusers.framework.transformer.wan._get_added_kv_projections') as mock_kv:
+        with patch("x_diffusers.framework.transformer.wan._get_added_kv_projections") as mock_kv:
             key_img = torch.randn(batch_size, seq_len, hidden_dim)
             value_img = torch.randn(batch_size, seq_len, hidden_dim)
             mock_kv.return_value = (key_img, value_img)
@@ -182,7 +184,7 @@ class TestParallelAttentionWithMock:
         """Test that parallel manager checks head divisibility."""
         from x_diffusers.framework.transformer.wan import AscendWanAttnProcessor2_0
 
-        processor = AscendWanAttnProcessor2_0()
+        processor = AscendWanAttnProcessor2_0()  # noqa: F841
 
         # Create attention with parallel manager
         attn = MagicMock()

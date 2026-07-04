@@ -3,15 +3,14 @@ Hunyuan 模型 Cache 加速实现
 
 包含 TeaCache 加速策略的前向传播实现。
 """
-from typing import Dict, Union, Any, Optional
+
 import os
+from typing import Any
 
 import numpy as np
 import torch
-from diffusers.utils import USE_PEFT_BACKEND, unscale_lora_layers
-from diffusers.models.modeling_outputs import Transformer2DModelOutput
 
-from ..utils import pre_forward, hunyuan_pre_forward, hunyuan_post_forward
+from ..utils import hunyuan_post_forward, hunyuan_pre_forward
 
 # 环境变量配置
 REL_L1_THRESH = float(os.getenv("REL_L1_THRESH", 0.12))
@@ -26,30 +25,55 @@ def teacache_hunyuan_forward(
     encoder_attention_mask: torch.Tensor,
     pooled_projections: torch.Tensor,
     guidance: torch.Tensor = None,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
+    attention_kwargs: dict[str, Any] | None = None,
     return_dict: bool = True,
-) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+) -> torch.Tensor | dict[str, torch.Tensor]:
     """Hunyuan TeaCache 前向传播"""
-    lora_scale, hidden_states, encoder_hidden_states, temb, attention_mask, \
-        image_rotary_emb, batch_size, post_patch_num_frames, post_patch_height, \
-        post_patch_width, p, p_t = hunyuan_pre_forward(
-            self, hidden_states, timestep, encoder_hidden_states,
-            encoder_attention_mask, pooled_projections, guidance, attention_kwargs
-        )
+    (
+        lora_scale,
+        hidden_states,
+        encoder_hidden_states,
+        temb,
+        attention_mask,
+        image_rotary_emb,
+        batch_size,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        p,
+        p_t,
+    ) = hunyuan_pre_forward(
+        self,
+        hidden_states,
+        timestep,
+        encoder_hidden_states,
+        encoder_attention_mask,
+        pooled_projections,
+        guidance,
+        attention_kwargs,
+    )
 
     # TeaCache 核心逻辑
     should_calc = _teacache_should_calc(self, hidden_states, temb)
 
     # 执行 transformer blocks
     hidden_states, encoder_hidden_states = _teacache_imple(
-        self, hidden_states, encoder_hidden_states, temb,
-        attention_mask, image_rotary_emb, should_calc
+        self, hidden_states, encoder_hidden_states, temb, attention_mask, image_rotary_emb, should_calc
     )
 
     # 后置处理
     output = hunyuan_post_forward(
-        self, hidden_states, temb, batch_size, post_patch_num_frames,
-        post_patch_height, post_patch_width, p, p_t, lora_scale, return_dict
+        self,
+        hidden_states,
+        temb,
+        batch_size,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        p,
+        p_t,
+        lora_scale,
+        return_dict,
     )
 
     return output
@@ -60,8 +84,9 @@ def _teacache_should_calc(self, hidden_states, temb):
     """判断 Hunyuan TeaCache 是否跳过"""
     if self.enable_teacache:
         temb = temb.clone()
-        (norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp) = \
-            self.transformer_blocks[0].norm1(hidden_states, emb=temb)
+        (norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp) = self.transformer_blocks[0].norm1(
+            hidden_states, emb=temb
+        )
 
         if self.cnt == 0 or self.cnt == self.num_steps - 1:
             should_calc = True
@@ -70,8 +95,14 @@ def _teacache_should_calc(self, hidden_states, temb):
             # 使用初始化时设置的 coefficients
             rescale_func = np.poly1d(self.coefficients)
 
-            rel_diff = ((norm_hidden_states - self.previous_modulated_input).abs().mean()
-                       / self.previous_modulated_input.abs().mean()).cpu().item()
+            rel_diff = (
+                (
+                    (norm_hidden_states - self.previous_modulated_input).abs().mean()
+                    / self.previous_modulated_input.abs().mean()
+                )
+                .cpu()
+                .item()
+            )
             self.accumulated_rel_l1_distance += rescale_func(rel_diff)
 
             if self.accumulated_rel_l1_distance < self.rel_l1_thresh:
@@ -90,8 +121,7 @@ def _teacache_should_calc(self, hidden_states, temb):
     return should_calc
 
 
-def _teacache_imple(self, hidden_states, encoder_hidden_states, temb,
-                    attention_mask, image_rotary_emb, should_calc):
+def _teacache_imple(self, hidden_states, encoder_hidden_states, temb, attention_mask, image_rotary_emb, should_calc):
     """执行 Hunyuan transformer blocks"""
     if self.enable_teacache:
         if not should_calc:
@@ -101,26 +131,22 @@ def _teacache_imple(self, hidden_states, encoder_hidden_states, temb,
             # Pass through DiT blocks
             for block in self.transformer_blocks:
                 hidden_states, encoder_hidden_states = block(
-                    hidden_states, encoder_hidden_states, temb,
-                    attention_mask, image_rotary_emb
+                    hidden_states, encoder_hidden_states, temb, attention_mask, image_rotary_emb
                 )
             for block in self.single_transformer_blocks:
                 hidden_states, encoder_hidden_states = block(
-                    hidden_states, encoder_hidden_states, temb,
-                    attention_mask, image_rotary_emb
+                    hidden_states, encoder_hidden_states, temb, attention_mask, image_rotary_emb
                 )
             self.previous_residual = hidden_states - origin
     else:
         # Pass through DiT blocks
         for block in self.transformer_blocks:
             hidden_states, encoder_hidden_states = block(
-                hidden_states, encoder_hidden_states, temb,
-                attention_mask, image_rotary_emb
+                hidden_states, encoder_hidden_states, temb, attention_mask, image_rotary_emb
             )
         for block in self.single_transformer_blocks:
             hidden_states, encoder_hidden_states = block(
-                hidden_states, encoder_hidden_states, temb,
-                attention_mask, image_rotary_emb
+                hidden_states, encoder_hidden_states, temb, attention_mask, image_rotary_emb
             )
 
     return hidden_states, encoder_hidden_states

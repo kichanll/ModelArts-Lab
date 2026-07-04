@@ -1,4 +1,15 @@
-from .utils import GroupCoordinator, init_TP, init_EP, init_CFG_Parallel, \
-    get_tp_group, get_tensor_model_parallel_rank, get_tensor_model_parallel_world_size, \
-    get_ep_group, get_expert_parallel_rank, get_expert_parallel_world_size, \
-    get_cfg_group, get_cfg_parallel_rank, get_cfg_parallel_world_size
+from .utils import (
+    GroupCoordinator,  # noqa: F401
+    get_cfg_group,  # noqa: F401
+    get_cfg_parallel_rank,  # noqa: F401
+    get_cfg_parallel_world_size,  # noqa: F401
+    get_ep_group,  # noqa: F401
+    get_expert_parallel_rank,  # noqa: F401
+    get_expert_parallel_world_size,  # noqa: F401
+    get_tensor_model_parallel_rank,  # noqa: F401
+    get_tensor_model_parallel_world_size,  # noqa: F401
+    get_tp_group,  # noqa: F401
+    init_CFG_Parallel,  # noqa: F401
+    init_EP,  # noqa: F401
+    init_TP,  # noqa: F401
+)

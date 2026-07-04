@@ -13,7 +13,7 @@ No sys.modules mocking is needed as we test mathematical operations and shapes.
 """
 
 import math
-import pytest
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -46,7 +46,7 @@ class TestWarpFunction:
     def test_warp_output_shape(self):
         """Test warp output shape matches input."""
         img = torch.randn(1, 3, 60, 104)
-        flow = torch.randn(1, 2, 60, 104)
+        flow = torch.randn(1, 2, 60, 104)  # noqa: F841
 
         # grid_sample preserves shape
         output_shape = img.shape
@@ -156,7 +156,7 @@ class TestResBlock:
     def test_resblock_forward_shape(self):
         """Test ResBlock forward preserves shape."""
         in_channels = 64
-        side_channels = 16
+        side_channels = 16  # noqa: F841
 
         # Simplified forward test
         x = torch.randn(1, in_channels, 60, 104)
@@ -169,7 +169,7 @@ class TestResBlock:
     def test_resblock_residual_connection(self):
         """Test ResBlock has residual connection."""
         has_residual = True
-        assert has_residual == True
+        assert has_residual == True  # noqa: E712
 
 
 class TestEncoderStructure:
@@ -193,7 +193,7 @@ class TestEncoderStructure:
         input_size = 480
         num_pyramids = 4
 
-        final_size = input_size // (2 ** num_pyramids)
+        final_size = input_size // (2**num_pyramids)
 
         assert final_size == 30  # 480 / 16
 
@@ -209,7 +209,7 @@ class TestDecoderStructure:
         latent_size = 30
         num_upsamples = 4
 
-        output_size = latent_size * (2 ** num_upsamples)
+        output_size = latent_size * (2**num_upsamples)
 
         assert output_size == 480  # 30 * 16
 

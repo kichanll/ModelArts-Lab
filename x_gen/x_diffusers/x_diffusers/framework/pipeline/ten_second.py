@@ -1,21 +1,21 @@
 import html
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from collections.abc import Callable
+from typing import Any
 
 import regex as re
 import torch
-from transformers import AutoTokenizer, CLIPImageProcessor, CLIPVisionModel, UMT5EncoderModel
-
 from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
 from diffusers.image_processor import PipelineImageInput
 from diffusers.loaders import WanLoraLoaderMixin
 from diffusers.models import AutoencoderKLWan, WanTransformer3DModel
-from ..schedulers import FlowMatchEulerDiscreteSchedulerPusa
-from diffusers.utils import is_ftfy_available, logging, replace_example_docstring
-from diffusers.utils.torch_utils import randn_tensor
-from diffusers.video_processor import VideoProcessor
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.wan.pipeline_output import WanPipelineOutput
-import torch.distributed as dist
+from diffusers.utils import is_ftfy_available, logging
+from diffusers.utils.torch_utils import randn_tensor
+from diffusers.video_processor import VideoProcessor
+from transformers import AutoTokenizer, CLIPImageProcessor, CLIPVisionModel, UMT5EncoderModel
+
+from ..schedulers import FlowMatchEulerDiscreteSchedulerPusa
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -42,7 +42,7 @@ def prompt_clean(text):
 
 # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.retrieve_latents
 def retrieve_latents(
-        encoder_output: torch.Tensor, generator: Optional[torch.Generator] = None, sample_mode: str = "sample"
+    encoder_output: torch.Tensor, generator: torch.Generator | None = None, sample_mode: str = "sample"
 ):
     if hasattr(encoder_output, "latent_dist") and sample_mode == "sample":
         return encoder_output.latent_dist.sample(generator)
@@ -60,17 +60,17 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
     _optional_components = ["transformer_2", "image_encoder", "image_processor"]
 
     def __init__(
-            self,
-            tokenizer: AutoTokenizer,
-            text_encoder: UMT5EncoderModel,
-            transformer: WanTransformer3DModel,
-            vae: AutoencoderKLWan,
-            scheduler: FlowMatchEulerDiscreteSchedulerPusa,
-            image_processor: CLIPImageProcessor = None,
-            image_encoder: CLIPVisionModel = None,
-            transformer_2: WanTransformer3DModel = None,
-            boundary_ratio: Optional[float] = None,
-            expand_timesteps: bool = False,
+        self,
+        tokenizer: AutoTokenizer,
+        text_encoder: UMT5EncoderModel,
+        transformer: WanTransformer3DModel,
+        vae: AutoencoderKLWan,
+        scheduler: FlowMatchEulerDiscreteSchedulerPusa,
+        image_processor: CLIPImageProcessor = None,
+        image_encoder: CLIPVisionModel = None,
+        transformer_2: WanTransformer3DModel = None,
+        boundary_ratio: float | None = None,
+        expand_timesteps: bool = False,
     ):
         super().__init__()
 
@@ -92,12 +92,12 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         self.image_processor = image_processor
 
     def _get_t5_prompt_embeds(
-            self,
-            prompt: Union[str, List[str]] = None,
-            num_videos_per_prompt: int = 1,
-            max_sequence_length: int = 512,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
+        self,
+        prompt: str | list[str] = None,
+        num_videos_per_prompt: int = 1,
+        max_sequence_length: int = 512,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         device = device or self._execution_device
         dtype = dtype or self.text_encoder.dtype
@@ -133,9 +133,9 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         return prompt_embeds
 
     def encode_image(
-            self,
-            image: PipelineImageInput,
-            device: Optional[torch.device] = None,
+        self,
+        image: PipelineImageInput,
+        device: torch.device | None = None,
     ):
         device = device or self._execution_device
         image = self.image_processor(images=image, return_tensors="pt").to(device)
@@ -144,16 +144,16 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
 
     # Copied from diffusers.pipelines.wan.pipeline_wan.WanPipeline.encode_prompt
     def encode_prompt(
-            self,
-            prompt: Union[str, List[str]],
-            negative_prompt: Optional[Union[str, List[str]]] = None,
-            do_classifier_free_guidance: bool = True,
-            num_videos_per_prompt: int = 1,
-            prompt_embeds: Optional[torch.Tensor] = None,
-            negative_prompt_embeds: Optional[torch.Tensor] = None,
-            max_sequence_length: int = 226,
-            device: Optional[torch.device] = None,
-            dtype: Optional[torch.dtype] = None,
+        self,
+        prompt: str | list[str],
+        negative_prompt: str | list[str] | None = None,
+        do_classifier_free_guidance: bool = True,
+        num_videos_per_prompt: int = 1,
+        prompt_embeds: torch.Tensor | None = None,
+        negative_prompt_embeds: torch.Tensor | None = None,
+        max_sequence_length: int = 226,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ):
         device = device or self._execution_device
 
@@ -199,21 +199,21 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
         return prompt_embeds, negative_prompt_embeds
 
     def prepare_latents(
-            self,
-            conditioning_video,
-            conditioning_indices,
-            conditioning_noise_multipliers,
-            batch_size: int,
-            num_channels_latents: int = 16,
-            height: int = 480,
-            width: int = 832,
-            num_frames: int = 81,
-            dtype: Optional[torch.dtype] = None,
-            device: Optional[torch.device] = None,
-            generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
-            latents: Optional[torch.Tensor] = None,
-            last_image: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self,
+        conditioning_video,
+        conditioning_indices,
+        conditioning_noise_multipliers,
+        batch_size: int,
+        num_channels_latents: int = 16,
+        height: int = 480,
+        width: int = 832,
+        num_frames: int = 81,
+        dtype: torch.dtype | None = None,
+        device: torch.device | None = None,
+        generator: torch.Generator | list[torch.Generator] | None = None,
+        latents: torch.Tensor | None = None,
+        last_image: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         num_latent_frames = (num_frames - 1) // self.vae_scale_factor_temporal + 1
         latent_height = height // self.vae_scale_factor_spatial
         latent_width = width // self.vae_scale_factor_spatial
@@ -271,10 +271,10 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
                 latent_condition.shape[1],  # 保持第二维度不变 (3)
                 pad_length,  # 第三维度补充16
                 latent_condition.shape[3],  # 保持第四维度不变 (60)
-                latent_condition.shape[4]  # 保持第五维度不变 (104)
+                latent_condition.shape[4],  # 保持第五维度不变 (104)
             ),
             device=latent_condition.device,  # 与原张量同设备
-            dtype=latent_condition.dtype  # 与原张量同数据类型
+            dtype=latent_condition.dtype,  # 与原张量同数据类型
         )
 
         # 在第三维度(dim=2)拼接原张量和补充的0张量
@@ -293,8 +293,9 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
                 latent_idx = frame_idx
                 cond_frame_latent_indices.append(latent_idx)
                 noise_multipliers[latent_idx] = conditioning_noise_multipliers[i]
-                latents[:, :, latent_idx:latent_idx + 1] = latent_condition[:, :, latent_idx:latent_idx + 1].to(
-                    latents.device)
+                latents[:, :, latent_idx : latent_idx + 1] = latent_condition[:, :, latent_idx : latent_idx + 1].to(
+                    latents.device
+                )
 
             return latents, latent_condition, first_frame_mask, cond_frame_latent_indices, noise_multipliers
         return latents, latent_condition, first_frame_mask, cond_frame_latent_indices, noise_multipliers
@@ -325,35 +326,35 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
 
     @torch.no_grad()
     def __call__(
-            self,
-            conditioning_video: Optional[list] = None,
-            conditioning_indices: Optional[list] = None,
-            conditioning_noise_multipliers: Optional[list] = None,
-            prompt: Union[str, List[str]] = None,
-            negative_prompt: Union[str, List[str]] = None,
-            height: int = 480,
-            width: int = 832,
-            num_frames: int = 81,
-            num_inference_steps: int = 50,
-            guidance_scale: float = 5.0,
-            guidance_scale_2: Optional[float] = None,
-            num_videos_per_prompt: Optional[int] = 1,
-            generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
-            latents: Optional[torch.Tensor] = None,
-            prompt_embeds: Optional[torch.Tensor] = None,
-            negative_prompt_embeds: Optional[torch.Tensor] = None,
-            image_embeds: Optional[torch.Tensor] = None,
-            last_image: Optional[torch.Tensor] = None,
-            output_type: Optional[str] = "np",
-            return_dict: bool = True,
-            attention_kwargs: Optional[Dict[str, Any]] = None,
-            callback_on_step_end: Optional[
-                Union[Callable[[int, int, Dict], None], PipelineCallback, MultiPipelineCallbacks]
-            ] = None,
-            callback_on_step_end_tensor_inputs: List[str] = None,
-            max_sequence_length: int = 512,
+        self,
+        conditioning_video: list | None = None,
+        conditioning_indices: list | None = None,
+        conditioning_noise_multipliers: list | None = None,
+        prompt: str | list[str] = None,
+        negative_prompt: str | list[str] = None,
+        height: int = 480,
+        width: int = 832,
+        num_frames: int = 81,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 5.0,
+        guidance_scale_2: float | None = None,
+        num_videos_per_prompt: int | None = 1,
+        generator: torch.Generator | list[torch.Generator] | None = None,
+        latents: torch.Tensor | None = None,
+        prompt_embeds: torch.Tensor | None = None,
+        negative_prompt_embeds: torch.Tensor | None = None,
+        image_embeds: torch.Tensor | None = None,
+        last_image: torch.Tensor | None = None,
+        output_type: str | None = "np",
+        return_dict: bool = True,
+        attention_kwargs: dict[str, Any] | None = None,
+        callback_on_step_end: Callable[[int, int, dict], None]
+        | PipelineCallback
+        | MultiPipelineCallbacks
+        | None = None,
+        callback_on_step_end_tensor_inputs: list[str] = None,
+        max_sequence_length: int = 512,
     ):
-
         self.config.expand_timesteps = True
         num_frames = max(num_frames, 1)
 
@@ -390,8 +391,9 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
 
         # 5. Prepare latent variables
         num_channels_latents = self.vae.config.z_dim
-        conditioning_video = self.video_processor.preprocess(conditioning_video, height=height, width=width).to(device,
-                                                                                                                dtype=torch.float32)
+        conditioning_video = self.video_processor.preprocess(conditioning_video, height=height, width=width).to(
+            device, dtype=torch.float32
+        )
 
         latents, condition, first_frame_mask, cond_frame_latent_indices, noise_multipliers = self.prepare_latents(
             conditioning_video,
@@ -428,19 +430,29 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
                     current_guidance_scale = guidance_scale_2
 
                 if self.config.expand_timesteps:
-                    timestep = t.unsqueeze(0).unsqueeze(1).repeat(1, latents.shape[2]).to(dtype=transformer_dtype,
-                                                                                          device=self.device)
+                    timestep = (
+                        t.unsqueeze(0)
+                        .unsqueeze(1)
+                        .repeat(1, latents.shape[2])
+                        .to(dtype=transformer_dtype, device=self.device)
+                    )
                     for latent_idx in cond_frame_latent_indices:
                         multiplier = noise_multipliers.get(latent_idx, 1.0)
-                        timestep[:, latent_idx] = timestep[:,
-                                                  latent_idx] * multiplier  # timestep = sigma * 1000, equivalent
+                        timestep[:, latent_idx] = (
+                            timestep[:, latent_idx] * multiplier
+                        )  # timestep = sigma * 1000, equivalent
                         if flag[:, latent_idx] == 0 and multiplier > 0:
                             flag[:, latent_idx] = 1
                             noise = randn_tensor(latents.shape, generator=generator, device=device, dtype=torch.float32)
                             timestep_cond = torch.ones_like(timestep) * timestep.max()
-                            latents[:, :, latent_idx:latent_idx + 1] = self.scheduler.add_noise_for_conditioning_frames(
-                                latents[:, :, latent_idx:latent_idx + 1], noise[:, :, latent_idx:latent_idx + 1],
-                                timestep_cond[:, latent_idx:latent_idx + 1], noise_multiplier=multiplier)
+                            latents[:, :, latent_idx : latent_idx + 1] = (
+                                self.scheduler.add_noise_for_conditioning_frames(
+                                    latents[:, :, latent_idx : latent_idx + 1],
+                                    noise[:, :, latent_idx : latent_idx + 1],
+                                    timestep_cond[:, latent_idx : latent_idx + 1],
+                                    noise_multiplier=multiplier,
+                                )
+                            )
 
                     latent_model_input = latents
                     latent_model_input = latent_model_input.to(transformer_dtype)
@@ -475,9 +487,13 @@ class WanVideoToVideoPipeline(DiffusionPipeline, WanLoraLoaderMixin):
                     )[0]
                     noise_pred = noise_uncond + current_guidance_scale * (noise_pred - noise_uncond)
                 orig_timestep = timestep.view(b, 1, f, h // 2, w // 2)[:, :, :, 0, 0].view(1, -1)
-                latents = self.scheduler.step(noise_pred, orig_timestep, latents,
-                                              cond_frame_latent_indices=cond_frame_latent_indices,
-                                              noise_multipliers=noise_multipliers)
+                latents = self.scheduler.step(
+                    noise_pred,
+                    orig_timestep,
+                    latents,
+                    cond_frame_latent_indices=cond_frame_latent_indices,
+                    noise_multipliers=noise_multipliers,
+                )
                 if callback_on_step_end is not None:
                     callback_kwargs = {}
                     for k in callback_on_step_end_tensor_inputs:

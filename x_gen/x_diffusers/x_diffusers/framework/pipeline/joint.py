@@ -1,29 +1,17 @@
+from collections.abc import Callable
+from typing import Any
+
 import torch
 from diffusers import WanImageToVideoPipeline
-import html
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-import PIL
-import regex as re
-import torch
-from transformers import AutoTokenizer, CLIPImageProcessor, CLIPVisionModel, UMT5EncoderModel
-
 from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
 from diffusers.image_processor import PipelineImageInput
-from diffusers.loaders import WanLoraLoaderMixin
 from diffusers.models import AutoencoderKLWan, WanTransformer3DModel
-from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
-from diffusers.utils import is_ftfy_available, is_torch_xla_available, logging, replace_example_docstring
-from diffusers.utils.torch_utils import randn_tensor
-from diffusers.video_processor import VideoProcessor
-from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.wan.pipeline_output import WanPipelineOutput
-import torch.distributed as dist
-import time
+from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
+from diffusers.utils import is_torch_xla_available, logging
+from transformers import AutoTokenizer, CLIPImageProcessor, CLIPVisionModel, UMT5EncoderModel
 
 if is_torch_xla_available():
-    import torch_xla.core.xla_model as xm
-
     XLA_AVAILABLE = True
 else:
     XLA_AVAILABLE = False
@@ -36,20 +24,19 @@ class WanImageToVideoPipelineJoint(WanImageToVideoPipeline):
     _optional_components = WanImageToVideoPipeline._optional_components + ["transformer_3"]
 
     def __init__(
-            self,
-            tokenizer: AutoTokenizer,
-            text_encoder: UMT5EncoderModel,
-            transformer: WanTransformer3DModel,
-            vae: AutoencoderKLWan,
-            scheduler: FlowMatchEulerDiscreteScheduler,
-            image_processor: CLIPImageProcessor = None,
-            image_encoder: CLIPVisionModel = None,
-            transformer_2: WanTransformer3DModel = None,
-            transformer_3: WanTransformer3DModel = None,
-            boundary_ratio: Optional[float] = None,
-            expand_timesteps: bool = False,
+        self,
+        tokenizer: AutoTokenizer,
+        text_encoder: UMT5EncoderModel,
+        transformer: WanTransformer3DModel,
+        vae: AutoencoderKLWan,
+        scheduler: FlowMatchEulerDiscreteScheduler,
+        image_processor: CLIPImageProcessor = None,
+        image_encoder: CLIPVisionModel = None,
+        transformer_2: WanTransformer3DModel = None,
+        transformer_3: WanTransformer3DModel = None,
+        boundary_ratio: float | None = None,
+        expand_timesteps: bool = False,
     ):
-
         super().__init__(
             tokenizer=tokenizer,
             text_encoder=text_encoder,
@@ -68,7 +55,7 @@ class WanImageToVideoPipelineJoint(WanImageToVideoPipeline):
     def calc_frames(self, num_frames):
         if num_frames % self.vae_scale_factor_temporal != 1:
             logger.warning(
-                f"`num_frames - 1` has to be divisible by {self.vae_scale_factor_temporal}. Rounding to the nearest number."
+                f"`num_frames - 1` has to be divisible by {self.vae_scale_factor_temporal}. Rounding to the nearest number."  # noqa: G004, E501
             )
             num_frames = num_frames // self.vae_scale_factor_temporal * self.vae_scale_factor_temporal + 1
         num_frames = max(num_frames, 1)
@@ -118,7 +105,7 @@ class WanImageToVideoPipelineJoint(WanImageToVideoPipeline):
         return latent_model_input
 
     def calc_video(self, latents, output_type):
-        if not output_type == "latent":
+        if output_type != "latent":
             latents = latents.to(self.vae.dtype)
             latents_mean = (
                 torch.tensor(self.vae.config.latents_mean)
@@ -137,34 +124,34 @@ class WanImageToVideoPipelineJoint(WanImageToVideoPipeline):
 
     @torch.no_grad()
     def __call__(
-            self,
-            image: PipelineImageInput,
-            prompt: Union[str, List[str]] = None,
-            negative_prompt: Union[str, List[str]] = None,
-            height: int = 480,
-            width: int = 832,
-            num_frames: int = 81,
-            num_inference_steps: int = 50,
-            guidance_scale: float = 5.0,
-            guidance_scale_2: Optional[float] = None,
-            guidance_scale_3: Optional[float] = None,
-            num_videos_per_prompt: Optional[int] = 1,
-            generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
-            latents: Optional[torch.Tensor] = None,
-            prompt_embeds: Optional[torch.Tensor] = None,
-            negative_prompt_embeds: Optional[torch.Tensor] = None,
-            image_embeds: Optional[torch.Tensor] = None,
-            last_image: Optional[torch.Tensor] = None,
-            output_type: Optional[str] = "np",
-            return_dict: bool = True,
-            attention_kwargs: Optional[Dict[str, Any]] = None,
-            callback_on_step_end: Optional[
-                Union[Callable[[int, int, Dict], None], PipelineCallback, MultiPipelineCallbacks]
-            ] = None,
-            callback_on_step_end_tensor_inputs: List[str] = None,
-            max_sequence_length: int = 512,
+        self,
+        image: PipelineImageInput,
+        prompt: str | list[str] = None,
+        negative_prompt: str | list[str] = None,
+        height: int = 480,
+        width: int = 832,
+        num_frames: int = 81,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 5.0,
+        guidance_scale_2: float | None = None,
+        guidance_scale_3: float | None = None,
+        num_videos_per_prompt: int | None = 1,
+        generator: torch.Generator | list[torch.Generator] | None = None,
+        latents: torch.Tensor | None = None,
+        prompt_embeds: torch.Tensor | None = None,
+        negative_prompt_embeds: torch.Tensor | None = None,
+        image_embeds: torch.Tensor | None = None,
+        last_image: torch.Tensor | None = None,
+        output_type: str | None = "np",
+        return_dict: bool = True,
+        attention_kwargs: dict[str, Any] | None = None,
+        callback_on_step_end: Callable[[int, int, dict], None]
+        | PipelineCallback
+        | MultiPipelineCallbacks
+        | None = None,
+        callback_on_step_end_tensor_inputs: list[str] = None,
+        max_sequence_length: int = 512,
     ):
-
         if callback_on_step_end_tensor_inputs is None:
             callback_on_step_end_tensor_inputs = ["latents"]
 
@@ -256,7 +243,7 @@ class WanImageToVideoPipelineJoint(WanImageToVideoPipeline):
 
         boundary_timestep = self.calc_boundaryts()
 
-        distill_timesteps = timesteps[::(small_steps + 1)]
+        distill_timesteps = timesteps[:: (small_steps + 1)]
         distill_steps = max(TOT_DISTILL_STEPS - 3, 5)
         distill_timesteps_trunc = distill_timesteps[:distill_steps]
         high_noise = distill_timesteps_trunc[distill_timesteps_trunc >= boundary_timestep]
@@ -273,14 +260,16 @@ class WanImageToVideoPipelineJoint(WanImageToVideoPipeline):
             for i, t in enumerate(timesteps):
                 self._current_timestep = t
 
-                current_model, current_guidance_scale = self.switch_model(t.item(), high_noise, low_noise,
-                                                                          small_boundary)
+                current_model, current_guidance_scale = self.switch_model(
+                    t.item(), high_noise, low_noise, small_boundary
+                )
                 if current_model is None:
-                    latents = self.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
+                    latents = self.scheduler.step(noise_pred, t, latents, return_dict=False)[0]  # noqa: F821
                     continue
 
-                latent_model_input = self.calc_latent_input(latents, condition, transformer_dtype, t.item(),
-                                                            small_boundary)
+                latent_model_input = self.calc_latent_input(
+                    latents, condition, transformer_dtype, t.item(), small_boundary
+                )
 
                 timestep = t.expand(latents.shape[0])
 

@@ -1,17 +1,18 @@
 """Common utilities for QwenImage pipelines."""
-import torch
+
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
+import torch
 import torch.distributed as dist
-from typing import Any, Callable
-
-from diffusers.utils import is_torch_xla_available, logging
 from diffusers.pipelines.qwenimage.pipeline_qwenimage_edit_plus import calculate_dimensions
-
+from diffusers.utils import is_torch_xla_available, logging
 from x_base import get_cfg_group
-
 
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm
+
     XLA_AVAILABLE = True
 else:
     XLA_AVAILABLE = False
@@ -29,10 +30,12 @@ def get_calculated_dimensions(pipeline, image):
     multiple_of = pipeline.vae_scale_factor * 2
     return calculated_width // multiple_of * multiple_of, calculated_height // multiple_of * multiple_of
 
+
 def prepare_dimensions(pipeline, image, height, width):
     """Prepare dimensions for QwenImageEditPipeline,QwenImageEditPlusPipeline."""
     calculated_width, calculated_height = get_calculated_dimensions(pipeline, image)
     return height or calculated_height, width or calculated_width
+
 
 def get_batch_size(prompt: str | list[str] | None, prompt_embeds: torch.Tensor | None) -> int:
     """Calculate batch size from prompt or prompt_embeds."""
@@ -59,7 +62,7 @@ def warn_cfg_settings(true_cfg_scale: float, has_neg_prompt: bool) -> None:
     """Log warnings for CFG settings."""
     if true_cfg_scale > 1 and not has_neg_prompt:
         logger.warning(
-            f"true_cfg_scale is passed as {true_cfg_scale}, but classifier-free guidance is not enabled since no negative_prompt is provided."
+            f"true_cfg_scale is passed as {true_cfg_scale}, but classifier-free guidance is not enabled since no negative_prompt is provided."  # noqa: G004, E501
         )
     elif true_cfg_scale <= 1 and has_neg_prompt:
         logger.warning(
@@ -70,6 +73,7 @@ def warn_cfg_settings(true_cfg_scale: float, has_neg_prompt: bool) -> None:
 # =============================================================================
 # CFG Utilities
 # =============================================================================
+
 
 def apply_cfg(
     noise_pred: torch.Tensor,
@@ -101,6 +105,7 @@ def apply_cfg_parallel(
 # =============================================================================
 # Pipeline Configuration
 # =============================================================================
+
 
 class PipelineConfig:
     """Configuration for different pipeline types."""
@@ -142,6 +147,7 @@ PIPELINE_CONFIGS = {
 # Pipeline Common Operations
 # =============================================================================
 
+
 def init_pipeline_state(
     pipeline,
     guidance_scale: float | None,
@@ -177,9 +183,7 @@ def get_cfg_setup(
     Returns:
         Tuple of (has_neg_prompt, do_true_cfg)
     """
-    has_neg_prompt = get_has_neg_prompt(
-        negative_prompt, negative_prompt_embeds, negative_prompt_embeds_mask
-    )
+    has_neg_prompt = get_has_neg_prompt(negative_prompt, negative_prompt_embeds, negative_prompt_embeds_mask)
     warn_cfg_settings(true_cfg_scale, has_neg_prompt)
     do_true_cfg = true_cfg_scale > 1 and has_neg_prompt
     return has_neg_prompt, do_true_cfg
@@ -253,9 +257,7 @@ def encode_prompts_with_cfg(
 
     elif cfg_parallel_size == 2:
         if not do_true_cfg:
-            has_neg_prompt = get_has_neg_prompt(
-                negative_prompt, negative_prompt_embeds, negative_prompt_embeds_mask
-            )
+            has_neg_prompt = get_has_neg_prompt(negative_prompt, negative_prompt_embeds, negative_prompt_embeds_mask)
             raise ValueError(
                 f"CFG parallel size is {cfg_parallel_size} must need 'true_cfg_scale > 1 and has_neg_prompt', "
                 f"but true_cfg_scale <= 1 or has_neg_prompt is {has_neg_prompt}"
@@ -343,7 +345,11 @@ def prepare_timesteps_and_guidance(
         Tuple of (timesteps, num_inference_steps, num_warmup_steps, guidance)
     """
     timesteps, num_inference_steps, num_warmup_steps = prepare_timesteps(
-        pipeline.scheduler, num_inference_steps, device, latents, sigmas,
+        pipeline.scheduler,
+        num_inference_steps,
+        device,
+        latents,
+        sigmas,
         calculate_shift_fn=calculate_shift_fn,
         retrieve_timesteps_fn=retrieve_timesteps_fn,
     )
@@ -369,7 +375,7 @@ def handle_guidance(
         return guidance
     elif not transformer.config.guidance_embeds and guidance_scale is not None:
         logger.warning(
-            f"guidance_scale is passed as {guidance_scale}, but ignored since the model is not guidance-distilled."
+            f"guidance_scale is passed as {guidance_scale}, but ignored since the model is not guidance-distilled."  # noqa: G004
         )
         return None
     elif not transformer.config.guidance_embeds and guidance_scale is None:
@@ -398,6 +404,7 @@ def finalize_output(
 # =============================================================================
 # Core Pipeline Runner
 # =============================================================================
+
 
 def run_qwenimage_pipeline_core(
     pipeline,
@@ -457,7 +464,9 @@ def run_qwenimage_pipeline_core(
 
     # 2. Check inputs
     pipeline.check_inputs(
-        prompt, height, width,
+        prompt,
+        height,
+        width,
         negative_prompt=negative_prompt,
         prompt_embeds=prompt_embeds,
         negative_prompt_embeds=negative_prompt_embeds,
@@ -483,10 +492,7 @@ def run_qwenimage_pipeline_core(
     device = pipeline._execution_device
 
     # 5. Handle negative prompt
-    _, do_true_cfg = get_cfg_setup(
-        true_cfg_scale, negative_prompt,
-        negative_prompt_embeds, negative_prompt_embeds_mask
-    )
+    _, do_true_cfg = get_cfg_setup(true_cfg_scale, negative_prompt, negative_prompt_embeds, negative_prompt_embeds_mask)
 
     # 6. Get image for encode_prompt (pipeline-specific)
     encode_image = None
@@ -494,44 +500,65 @@ def run_qwenimage_pipeline_core(
         encode_image = get_encode_image_fn(pipeline, image)
 
     # 7. Encode prompts
-    (
-        prompt_embeds, prompt_embeds_mask,
-        negative_prompt_embeds, negative_prompt_embeds_mask,
-        local_rank
-    ) = encode_prompts_with_cfg(
-        pipeline, cfg_parallel_size, do_true_cfg, device,
-        num_images_per_prompt, max_sequence_length,
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        prompt_embeds=prompt_embeds,
-        prompt_embeds_mask=prompt_embeds_mask,
-        negative_prompt_embeds=negative_prompt_embeds,
-        negative_prompt_embeds_mask=negative_prompt_embeds_mask,
-        image=encode_image if not config.needs_multiple_images else None,
-        condition_images=encode_image if config.needs_multiple_images else None,
+    (prompt_embeds, prompt_embeds_mask, negative_prompt_embeds, negative_prompt_embeds_mask, local_rank) = (
+        encode_prompts_with_cfg(
+            pipeline,
+            cfg_parallel_size,
+            do_true_cfg,
+            device,
+            num_images_per_prompt,
+            max_sequence_length,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            prompt_embeds=prompt_embeds,
+            prompt_embeds_mask=prompt_embeds_mask,
+            negative_prompt_embeds=negative_prompt_embeds,
+            negative_prompt_embeds_mask=negative_prompt_embeds_mask,
+            image=encode_image if not config.needs_multiple_images else None,
+            condition_images=encode_image if config.needs_multiple_images else None,
+        )
     )
 
     # 8. Prepare latents and img_shapes (pipeline-specific)
     if prepare_latents_data_fn is not None:
         latents, img_shapes, extra_data = prepare_latents_data_fn(
-            pipeline, image, batch_size, num_images_per_prompt,
-            height, width, prompt_embeds.dtype, device, generator, latents
+            pipeline,
+            image,
+            batch_size,
+            num_images_per_prompt,
+            height,
+            width,
+            prompt_embeds.dtype,
+            device,
+            generator,
+            latents,
         )
     else:
         # Default for QwenImagePipeline
         num_channels_latents = pipeline.transformer.config.in_channels // 4
         latents = pipeline.prepare_latents(
             batch_size * num_images_per_prompt,
-            num_channels_latents, height, width,
-            prompt_embeds.dtype, device, generator, latents,
+            num_channels_latents,
+            height,
+            width,
+            prompt_embeds.dtype,
+            device,
+            generator,
+            latents,
         )
-        img_shapes = [[(1, height // pipeline.vae_scale_factor // 2,
-                        width // pipeline.vae_scale_factor // 2)]] * batch_size
+        img_shapes = [
+            [(1, height // pipeline.vae_scale_factor // 2, width // pipeline.vae_scale_factor // 2)]
+        ] * batch_size
         extra_data = {}
 
     # 9. Prepare timesteps and guidance
     timesteps, num_inference_steps, num_warmup_steps, guidance = prepare_timesteps_and_guidance(
-        pipeline, num_inference_steps, device, latents, guidance_scale, sigmas,
+        pipeline,
+        num_inference_steps,
+        device,
+        latents,
+        guidance_scale,
+        sigmas,
         calculate_shift_fn=calculate_shift_fn,
         retrieve_timesteps_fn=retrieve_timesteps_fn,
     )
@@ -571,10 +598,7 @@ def run_qwenimage_pipeline_core(
     )
 
     # 12. Finalize output
-    return finalize_output(
-        pipeline, latents, height, width, output_type, return_dict,
-        output_class=output_class
-    )
+    return finalize_output(pipeline, latents, height, width, output_type, return_dict, output_class=output_class)
 
 
 def decode_latents_to_image(
@@ -609,6 +633,7 @@ def decode_latents_to_image(
 # =============================================================================
 # Denoising Loop Helpers
 # =============================================================================
+
 
 def _run_single_gpu_step(
     pipeline,
@@ -749,7 +774,9 @@ def run_denoising_loop(
 ):
     """Run the denoising loop."""
 
-    callback_inputs = callback_on_step_end_tensor_inputs if callback_on_step_end_tensor_inputs is not None else ["latents"]
+    callback_inputs = (
+        callback_on_step_end_tensor_inputs if callback_on_step_end_tensor_inputs is not None else ["latents"]
+    )
     pipeline.scheduler.set_begin_index(0)
 
     with pipeline.progress_bar(total=num_inference_steps) as progress_bar:
@@ -773,18 +800,35 @@ def run_denoising_loop(
             # Run denoising step
             if cfg_parallel_size == 1:
                 noise_pred = _run_single_gpu_step(
-                    pipeline, latent_model_input, timestep, guidance,
-                    prompt_embeds, prompt_embeds_mask,
-                    negative_prompt_embeds, negative_prompt_embeds_mask,
-                    img_shapes, attn_kwargs, do_true_cfg, true_cfg_scale,
-                    noise_pred_postprocess, latents
+                    pipeline,
+                    latent_model_input,
+                    timestep,
+                    guidance,
+                    prompt_embeds,
+                    prompt_embeds_mask,
+                    negative_prompt_embeds,
+                    negative_prompt_embeds_mask,
+                    img_shapes,
+                    attn_kwargs,
+                    do_true_cfg,
+                    true_cfg_scale,
+                    noise_pred_postprocess,
+                    latents,
                 )
             else:
                 noise_pred = _run_parallel_cfg_step(
-                    pipeline, latent_model_input, timestep, guidance,
-                    prompt_embeds, prompt_embeds_mask,
-                    img_shapes, attn_kwargs, true_cfg_scale,
-                    noise_pred_postprocess, latents, local_rank
+                    pipeline,
+                    latent_model_input,
+                    timestep,
+                    guidance,
+                    prompt_embeds,
+                    prompt_embeds_mask,
+                    img_shapes,
+                    attn_kwargs,
+                    true_cfg_scale,
+                    noise_pred_postprocess,
+                    latents,
+                    local_rank,
                 )
 
             # Scheduler step
@@ -794,8 +838,7 @@ def run_denoising_loop(
 
             # Callback
             latents, prompt_embeds = _handle_callback(
-                callback_on_step_end, callback_inputs,
-                pipeline, i, t, latents, prompt_embeds
+                callback_on_step_end, callback_inputs, pipeline, i, t, latents, prompt_embeds
             )
 
             # Update progress bar

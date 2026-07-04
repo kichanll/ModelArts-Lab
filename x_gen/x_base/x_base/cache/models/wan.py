@@ -3,15 +3,16 @@ Wan 模型 Cache 加速实现
 
 包含 TeaCache 和 MagCache 两种加速策略的前向传播实现。
 """
-from typing import Dict, Union, Any, Optional
+
 import os
+from typing import Any
 
 import numpy as np
 import torch
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 
-from ..base import nearest_interp, load_cache_config
-from ..utils import pre_forward, wan_pre_forward, wan_post_forward
+from ..base import load_cache_config, nearest_interp
+from ..utils import wan_post_forward, wan_pre_forward
 
 # 环境变量配置
 RESIDUAL_DIFF_THRESHOLD = float(os.getenv("RESIDUAL_DIFF_THRESHOLD", 0))
@@ -29,17 +30,29 @@ def teacache_wan_forward(
     hidden_states: torch.Tensor,
     timestep: torch.LongTensor,
     encoder_hidden_states: torch.Tensor,
-    encoder_hidden_states_image: Optional[torch.Tensor] = None,
+    encoder_hidden_states_image: torch.Tensor | None = None,
     return_dict: bool = True,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
-) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+    attention_kwargs: dict[str, Any] | None = None,
+) -> torch.Tensor | dict[str, torch.Tensor]:
     """Wan TeaCache 前向传播"""
     # 前置处理
-    lora_scale, hidden_states, encoder_hidden_states, post_patch_num_frames, post_patch_height, post_patch_width, \
-        rotary_emb, temb, timestep_proj, batch_size, p_t, p_h, p_w = wan_pre_forward(
-            self, hidden_states, timestep, encoder_hidden_states,
-            encoder_hidden_states_image, attention_kwargs
-        )
+    (
+        lora_scale,
+        hidden_states,
+        encoder_hidden_states,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        rotary_emb,
+        temb,
+        timestep_proj,
+        batch_size,
+        p_t,
+        p_h,
+        p_w,
+    ) = wan_pre_forward(
+        self, hidden_states, timestep, encoder_hidden_states, encoder_hidden_states_image, attention_kwargs
+    )
 
     ori_x = hidden_states
 
@@ -60,8 +73,17 @@ def teacache_wan_forward(
 
     # 后置处理
     output = wan_post_forward(
-        self, hidden_states, temb, batch_size, post_patch_num_frames,
-        post_patch_height, post_patch_width, p_t, p_h, p_w, lora_scale
+        self,
+        hidden_states,
+        temb,
+        batch_size,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        p_t,
+        p_h,
+        p_w,
+        lora_scale,
     )
 
     _update_step_counter(self)
@@ -73,18 +95,30 @@ def teacache_wan_vace_forward(
     hidden_states: torch.Tensor,
     timestep: torch.LongTensor,
     encoder_hidden_states: torch.Tensor,
-    encoder_hidden_states_image: Optional[torch.Tensor] = None,
+    encoder_hidden_states_image: torch.Tensor | None = None,
     control_hidden_states: torch.Tensor = None,
     control_hidden_states_scale: torch.Tensor = None,
     return_dict: bool = True,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
-) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+    attention_kwargs: dict[str, Any] | None = None,
+) -> torch.Tensor | dict[str, torch.Tensor]:
     """Wan VACE TeaCache 前向传播（视频编辑任务）"""
-    lora_scale, hidden_states, encoder_hidden_states, post_patch_num_frames, post_patch_height, post_patch_width, \
-        rotary_emb, temb, timestep_proj, batch_size, p_t, p_h, p_w = wan_pre_forward(
-            self, hidden_states, timestep, encoder_hidden_states,
-            encoder_hidden_states_image, attention_kwargs
-        )
+    (
+        lora_scale,
+        hidden_states,
+        encoder_hidden_states,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        rotary_emb,
+        temb,
+        timestep_proj,
+        batch_size,
+        p_t,
+        p_h,
+        p_w,
+    ) = wan_pre_forward(
+        self, hidden_states, timestep, encoder_hidden_states, encoder_hidden_states_image, attention_kwargs
+    )
 
     # VACE 控制状态处理
     control_hidden_states, control_hidden_states_scale = _vace_preprocess_control(
@@ -102,19 +136,38 @@ def teacache_wan_vace_forward(
             hidden_states = hidden_states + _get_residual(self, idx)
         else:
             hidden_states = _vace_forward_step(
-                self, hidden_states, encoder_hidden_states, timestep_proj,
-                control_hidden_states, rotary_emb, control_hidden_states_scale
+                self,
+                hidden_states,
+                encoder_hidden_states,
+                timestep_proj,
+                control_hidden_states,
+                rotary_emb,
+                control_hidden_states_scale,
             )
             _set_residual(self, idx, hidden_states - ori_x)
     else:
         hidden_states = _vace_forward_step(
-            self, hidden_states, encoder_hidden_states, timestep_proj,
-            control_hidden_states, rotary_emb, control_hidden_states_scale
+            self,
+            hidden_states,
+            encoder_hidden_states,
+            timestep_proj,
+            control_hidden_states,
+            rotary_emb,
+            control_hidden_states_scale,
         )
 
     output = wan_post_forward(
-        self, hidden_states, temb, batch_size, post_patch_num_frames,
-        post_patch_height, post_patch_width, p_t, p_h, p_w, lora_scale
+        self,
+        hidden_states,
+        temb,
+        batch_size,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        p_t,
+        p_h,
+        p_w,
+        lora_scale,
     )
 
     _update_step_counter(self)
@@ -127,21 +180,33 @@ def magcache_wan_forward(
     hidden_states: torch.Tensor,
     timestep: torch.LongTensor,
     encoder_hidden_states: torch.Tensor,
-    encoder_hidden_states_image: Optional[torch.Tensor] = None,
+    encoder_hidden_states_image: torch.Tensor | None = None,
     return_dict: bool = True,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
-) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+    attention_kwargs: dict[str, Any] | None = None,
+) -> torch.Tensor | dict[str, torch.Tensor]:
     """Wan MagCache 前向传播"""
-    lora_scale, hidden_states, encoder_hidden_states, post_patch_num_frames, post_patch_height, post_patch_width, \
-        rotary_emb, temb, timestep_proj, batch_size, p_t, p_h, p_w = wan_pre_forward(
-            self, hidden_states, timestep, encoder_hidden_states,
-            encoder_hidden_states_image, attention_kwargs
-        )
+    (
+        lora_scale,
+        hidden_states,
+        encoder_hidden_states,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        rotary_emb,
+        temb,
+        timestep_proj,
+        batch_size,
+        p_t,
+        p_h,
+        p_w,
+    ) = wan_pre_forward(
+        self, hidden_states, timestep, encoder_hidden_states, encoder_hidden_states_image, attention_kwargs
+    )
 
     ori_x = hidden_states
     residual_x = None
 
-    if getattr(self, 'wan2', False):
+    if getattr(self, "wan2", False):
         skip_forward, residual_x = _magcache_wan22_logic(self, ori_x)
     else:
         skip_forward, residual_x = _magcache_wan21_logic(self, ori_x)
@@ -155,8 +220,17 @@ def magcache_wan_forward(
     _update_residual_cache(self, residual_x)
 
     output = wan_post_forward(
-        self, hidden_states, temb, batch_size, post_patch_num_frames,
-        post_patch_height, post_patch_width, p_t, p_h, p_w, lora_scale
+        self,
+        hidden_states,
+        temb,
+        batch_size,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        p_t,
+        p_h,
+        p_w,
+        lora_scale,
     )
 
     _update_step_counter_magcache(self)
@@ -168,18 +242,30 @@ def magcache_wan_calibration(
     hidden_states: torch.Tensor,
     timestep: torch.LongTensor,
     encoder_hidden_states: torch.Tensor,
-    encoder_hidden_states_image: Optional[torch.Tensor] = None,
+    encoder_hidden_states_image: torch.Tensor | None = None,
     return_dict: bool = True,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
-) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+    attention_kwargs: dict[str, Any] | None = None,
+) -> torch.Tensor | dict[str, torch.Tensor]:
     """MagCache 校准模式（生成 mag_ratios）"""
     import torch.distributed as dist
 
-    lora_scale, hidden_states, encoder_hidden_states, post_patch_num_frames, post_patch_height, post_patch_width, \
-        rotary_emb, temb, timestep_proj, batch_size, p_t, p_h, p_w = wan_pre_forward(
-            self, hidden_states, timestep, encoder_hidden_states,
-            encoder_hidden_states_image, attention_kwargs
-        )
+    (
+        lora_scale,
+        hidden_states,
+        encoder_hidden_states,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        rotary_emb,
+        temb,
+        timestep_proj,
+        batch_size,
+        p_t,
+        p_h,
+        p_w,
+    ) = wan_pre_forward(
+        self, hidden_states, timestep, encoder_hidden_states, encoder_hidden_states_image, attention_kwargs
+    )
 
     ori_x = hidden_states
     hidden_states = self.forward_block(hidden_states, encoder_hidden_states, timestep_proj, rotary_emb)
@@ -188,8 +274,17 @@ def magcache_wan_calibration(
     _calibration_update(self, residual_x)
 
     output = wan_post_forward(
-        self, hidden_states, temb, batch_size, post_patch_num_frames,
-        post_patch_height, post_patch_width, p_t, p_h, p_w, lora_scale
+        self,
+        hidden_states,
+        temb,
+        batch_size,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        p_t,
+        p_h,
+        p_w,
+        lora_scale,
     )
 
     self.cnt += 1
@@ -244,8 +339,9 @@ def _vace_preprocess_control(self, control_states, control_scale, batch_size, hi
     return control_states, control_scale
 
 
-def _vace_forward_step(self, hidden_states, encoder_hidden_states, timestep_proj,
-                       control_hidden_states, rotary_emb, control_scale):
+def _vace_forward_step(
+    self, hidden_states, encoder_hidden_states, timestep_proj, control_hidden_states, rotary_emb, control_scale
+):
     """VACE 单步前向"""
     control_list = []
     for i, block in enumerate(self.vace_blocks):
@@ -256,9 +352,7 @@ def _vace_forward_step(self, hidden_states, encoder_hidden_states, timestep_proj
     control_list = control_list[::-1]
 
     for i, block in enumerate(self.blocks):
-        hidden_states, encoder_hidden_states = block(
-            hidden_states, encoder_hidden_states, timestep_proj, rotary_emb
-        )
+        hidden_states, encoder_hidden_states = block(hidden_states, encoder_hidden_states, timestep_proj, rotary_emb)
         if i in self.config.vace_layers:
             hint, scale = control_list.pop()
             hidden_states = hidden_states + hint * scale
@@ -310,14 +404,12 @@ def _magcache_wan22_logic(self, ori_x):
 def _compute_use_magcache_wan22(self):
     if self.split_step is not None:
         if self.mode == "i2v":
-            return self.cnt >= int(
-                self.split_step + (self.num_steps - self.split_step) * self.retention_ratio
-            )
+            return self.cnt >= int(self.split_step + (self.num_steps - self.split_step) * self.retention_ratio)
         else:
             r = self.retention_ratio
             if self.cnt < int(self.split_step * r):
                 return False
-            if self.split_step <= self.cnt <= int((self.num_steps - self.split_step) * r + self.split_step):
+            if self.split_step <= self.cnt <= int((self.num_steps - self.split_step) * r + self.split_step):  # noqa: SIM103
                 return False
             return True
     return self.cnt < int(self.num_steps * self.retention_ratio)
@@ -329,9 +421,11 @@ def _calibration_update(self, residual_x):
         if self.cnt >= 1:
             ratio = (residual_x.norm(dim=-1) / self.residual_cache[0].norm(dim=-1)).mean().item()
             std = (residual_x.norm(dim=-1) / self.residual_cache[0].norm(dim=-1)).std().item()
-            cos = (1 - torch.nn.functional.cosine_similarity(
-                residual_x, self.residual_cache[0], dim=-1, eps=1e-8
-            )).mean().item()
+            cos = (
+                (1 - torch.nn.functional.cosine_similarity(residual_x, self.residual_cache[0], dim=-1, eps=1e-8))
+                .mean()
+                .item()
+            )
             self.norm_ratio.append(round(ratio, 5))
             self.norm_std.append(round(std, 5))
             self.cos_dis.append(round(cos, 5))
@@ -340,9 +434,16 @@ def _calibration_update(self, residual_x):
         if self.cnt >= 2:
             ratio = (residual_x.norm(dim=-1) / self.residual_cache[self.cnt % 2].norm(dim=-1)).mean().item()
             std = (residual_x.norm(dim=-1) / self.residual_cache[self.cnt % 2].norm(dim=-1)).std().item()
-            cos = (1 - torch.nn.functional.cosine_similarity(
-                residual_x, self.residual_cache[self.cnt % 2], dim=-1, eps=1e-8
-            )).mean().item()
+            cos = (
+                (
+                    1
+                    - torch.nn.functional.cosine_similarity(
+                        residual_x, self.residual_cache[self.cnt % 2], dim=-1, eps=1e-8
+                    )
+                )
+                .mean()
+                .item()
+            )
             self.norm_ratio.append(round(ratio, 5))
             self.norm_std.append(round(std, 5))
             self.cos_dis.append(round(cos, 5))
@@ -353,27 +454,41 @@ def _calibration_update(self, residual_x):
 def _get_accumulated_distance(self, idx):
     return self.accumulated_rel_l1_distance_even if idx == 0 else self.accumulated_rel_l1_distance_odd
 
+
 def _set_accumulated_distance(self, idx, val):
-    if idx == 0: self.accumulated_rel_l1_distance_even = val
-    else: self.accumulated_rel_l1_distance_odd = val
+    if idx == 0:
+        self.accumulated_rel_l1_distance_even = val
+    else:
+        self.accumulated_rel_l1_distance_odd = val
+
 
 def _get_previous_input(self, idx):
     return self.previous_e0_even if idx == 0 else self.previous_e0_odd
 
+
 def _set_previous_input(self, idx, val):
-    if idx == 0: self.previous_e0_even = val
-    else: self.previous_e0_odd = val
+    if idx == 0:
+        self.previous_e0_even = val
+    else:
+        self.previous_e0_odd = val
+
 
 def _get_residual(self, idx):
     return self.previous_residual_even if idx == 0 else self.previous_residual_odd
 
+
 def _set_residual(self, idx, val):
-    if idx == 0: self.previous_residual_even = val
-    else: self.previous_residual_odd = val
+    if idx == 0:
+        self.previous_residual_even = val
+    else:
+        self.previous_residual_odd = val
+
 
 def _update_step_counter(self):
     self.cnt += 1
-    if self.cnt >= self.num_steps: self.cnt = 0
+    if self.cnt >= self.num_steps:
+        self.cnt = 0
+
 
 def _update_step_counter_magcache(self):
     self.cnt.add_(1)
@@ -384,16 +499,19 @@ def _update_step_counter_magcache(self):
         self.accumulated_err = [0.0] * n
         self.accumulated_steps = [0] * n
 
+
 def _update_cache(self, ratio):
     idx = self.cnt % 2
     self.accumulated_ratio[idx] *= ratio
     self.accumulated_steps[idx] += 1
     self.accumulated_err[idx] += abs(1 - self.accumulated_ratio[idx])
 
+
 def _update_cache_distill(self, ratio):
     self.accumulated_ratio[0] *= ratio
     self.accumulated_steps[0] += 1
     self.accumulated_err[0] += abs(1 - self.accumulated_ratio[0])
+
 
 def _check_skip_conditions(self):
     if self.is_distill:
@@ -401,8 +519,10 @@ def _check_skip_conditions(self):
     idx = self.cnt % 2
     return self.accumulated_err[idx] < self.magcache_thresh and self.accumulated_steps[idx] <= self.K
 
+
 def _get_cached_residual(self):
     return self.residual_cache[0] if self.is_distill else self.residual_cache[self.cnt % 2]
+
 
 def _reset_cache(self):
     if self.is_distill:
@@ -415,6 +535,7 @@ def _reset_cache(self):
         self.accumulated_steps[idx] = 0
         self.accumulated_ratio[idx] = 1.0
 
+
 def _update_residual_cache(self, residual):
     if self.is_distill:
         self.residual_cache[0] = residual
@@ -425,7 +546,7 @@ def _update_residual_cache(self, residual):
 # ============ 初始化函数 ============
 def teacache_init(pipe, args):
     """初始化 Wan TeaCache"""
-    is_vace = 'VACE' in args.model
+    is_vace = "VACE" in args.model
     is_i2v = args.task_type == "i2v"
 
     pipe.transformer.__class__.enable_teacache = True
@@ -475,11 +596,11 @@ def _infer_wan_model_key(args, is_i2v: bool) -> str:
     Returns:
         配置文件中的模型键，如 "2.1-T2V-1.3B", "2.1-I2V-480P"
     """
-    if '1.3B' in args.model:
+    if "1.3B" in args.model:
         return "2.1-T2V-1.3B"
-    elif '14B' in args.model:
+    elif "14B" in args.model:
         if is_i2v:
-            if '480' in args.pretrained_model_name_or_path:
+            if "480" in args.pretrained_model_name_or_path:
                 return "2.1-I2V-480P"
             else:
                 return "2.1-I2V-720P"
@@ -492,6 +613,7 @@ def _infer_wan_model_key(args, is_i2v: bool) -> str:
 def magcache_calibration(pipe, args):
     """初始化 MagCache 校准模式"""
     from copy import deepcopy
+
     pipe.transformer.__class__.forward = magcache_wan_calibration
     pipe.transformer.__class__.cnt = torch.tensor(0)
     pipe.transformer.__class__.num_steps = args.num_inference_steps * 2
@@ -525,9 +647,9 @@ def magcache_init(pipe, args):
     data_temp = np.concatenate(([1.0, 1.0], mag_ratios))
     pipe.transformer.__class__.mag_ratios = np.array(data_temp)
 
-    if 'Wan2.1' in args.model:
+    if "Wan2.1" in args.model:
         _magcache_init_wan21(pipe, args)
-    elif 'Wan2.2' in args.model:
+    elif "Wan2.2" in args.model:
         _magcache_init_wan22(pipe, args, mag_ratios)
     else:
         raise ValueError(f"Unsupported magcache of wan model type: '{args.model}'.")
@@ -537,17 +659,17 @@ def _get_mag_ratios(args, config):
     """获取 mag_ratios"""
     mag_ratios = config.get("mag_ratios", {})
 
-    if 'Wan2.1-T2V-1.3B' in args.model:
+    if "Wan2.1-T2V-1.3B" in args.model:
         return mag_ratios.get("wan2.1-t2v-1.3b", [])
-    if 'Wan2.1-T2V-14B' in args.model:
+    if "Wan2.1-T2V-14B" in args.model:
         return mag_ratios.get("wan2.1-t2v-14b", [])
-    if 'Wan2.1-I2V-14B' in args.model:
-        if '480' in args.pretrained_model_name_or_path:
+    if "Wan2.1-I2V-14B" in args.model:
+        if "480" in args.pretrained_model_name_or_path:
             return mag_ratios.get("wan2.1-i2v-480p", [])
         return mag_ratios.get("wan2.1-i2v-720p", [])
-    if 'Wan2.2-T2V-A14B' in args.model:
+    if "Wan2.2-T2V-A14B" in args.model:
         return mag_ratios.get("wan2.2-t2v-x" if args.x else "wan2.2-t2v-A14B", [])
-    if 'Wan2.2-I2V-A14B' in args.model:
+    if "Wan2.2-I2V-A14B" in args.model:
         return mag_ratios.get("wan2.2-i2v-x" if args.x else "wan2.2-i2v-A14B", [])
     return []
 
@@ -556,10 +678,10 @@ def _magcache_init_wan21(pipe, args):
     pipe.transformer.__class__.wan2 = False
     pipe.transformer.__class__.is_distill = False
 
-    if args.task_type == "t2v" and 'T2V-1.3B' in args.pretrained_model_name_or_path:
+    if args.task_type == "t2v" and "T2V-1.3B" in args.pretrained_model_name_or_path:
         pipe.transformer.__class__.magcache_thresh = 0.12
         pipe.transformer.__class__.K = 4
-    elif args.task_type == "i2v" and 'I2V-14B' in args.pretrained_model_name_or_path:
+    elif args.task_type == "i2v" and "I2V-14B" in args.pretrained_model_name_or_path:
         pipe.transformer.__class__.magcache_thresh = 0.05
         pipe.transformer.__class__.K = MAGCACHE_K
         pipe.transformer.__class__.retention_ratio = 0.1
@@ -598,7 +720,7 @@ def _magcache_init_wan22(pipe, args, mag_ratios):
     else:
         pipe.transformer.__class__.magcache_thresh = 0.06
         pipe.transformer.__class__.K = 2
-        if 'T2V-A14B' in args.pretrained_model_name_or_path:
+        if "T2V-A14B" in args.pretrained_model_name_or_path:
             pipe.transformer.__class__.retention_ratio = 0.4
-        if 'I2V-A14B' in args.pretrained_model_name_or_path:
+        if "I2V-A14B" in args.pretrained_model_name_or_path:
             pipe.transformer.__class__.retention_ratio = 0.1

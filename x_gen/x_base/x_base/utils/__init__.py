@@ -1,2 +1,2 @@
-from .infer_info import infer_info
-from .file import read_text, list_cases
+from .file import list_cases, read_text  # noqa: F401
+from .infer_info import infer_info  # noqa: F401

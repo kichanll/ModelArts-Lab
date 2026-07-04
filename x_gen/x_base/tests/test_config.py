@@ -4,10 +4,12 @@ Unit tests for config loading functionality.
 Tests the importlib.resources based config loading for both cache_config.yaml
 and quant_config.yaml with unified config module.
 """
+
+from importlib import resources
+from unittest.mock import mock_open, patch
+
 import pytest
 import yaml
-from unittest.mock import patch, mock_open, MagicMock
-from importlib import resources
 
 
 # ============================================================
@@ -16,30 +18,34 @@ from importlib import resources
 def load_cache_config():
     """Load cache_config.yaml using importlib.resources with fallback for Python 3.7-3.8."""
     try:
-        config_package = resources.files('x_base.config')
-        with config_package.joinpath('cache_config.yaml').open('r', encoding='utf-8') as f:
+        config_package = resources.files("x_base.config")
+        with config_package.joinpath("cache_config.yaml").open("r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     except (AttributeError, TypeError):
         # Python 3.7-3.8 fallback
-        import x_base.config as config_module
         import os
-        config_path = os.path.join(os.path.dirname(config_module.__file__), 'cache_config.yaml')
-        with open(config_path, 'r', encoding='utf-8') as f:
+
+        import x_base.config as config_module
+
+        config_path = os.path.join(os.path.dirname(config_module.__file__), "cache_config.yaml")
+        with open(config_path, encoding="utf-8") as f:
             return yaml.safe_load(f)
 
 
 def load_quant_config():
     """Load quant_config.yaml using importlib.resources with fallback for Python 3.7-3.8."""
     try:
-        config_package = resources.files('x_base.config')
-        with config_package.joinpath('quant_config.yaml').open('r', encoding='utf-8') as f:
+        config_package = resources.files("x_base.config")
+        with config_package.joinpath("quant_config.yaml").open("r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     except (AttributeError, TypeError):
         # Python 3.7-3.8 fallback
-        import x_base.config as config_module
         import os
-        config_path = os.path.join(os.path.dirname(config_module.__file__), 'quant_config.yaml')
-        with open(config_path, 'r', encoding='utf-8') as f:
+
+        import x_base.config as config_module
+
+        config_path = os.path.join(os.path.dirname(config_module.__file__), "quant_config.yaml")
+        with open(config_path, encoding="utf-8") as f:
             return yaml.safe_load(f)
 
 
@@ -81,7 +87,8 @@ class TestCacheConfigLoading:
     def test_config_package_exists(self):
         """Test that x_base.config package is importable."""
         try:
-            import x_base.config
+            import x_base.config  # noqa: F401
+
             assert True
         except ImportError:
             pytest.fail("x_base.config package should be importable")
@@ -89,24 +96,26 @@ class TestCacheConfigLoading:
     def test_config_has_init_file(self):
         """Test that config package is properly configured for importlib.resources."""
         import x_base.config
+
         try:
-            config_package = resources.files('x_base.config')
+            config_package = resources.files("x_base.config")
             assert config_package is not None
         except (AttributeError, TypeError):
-            import os
-            init_path = getattr(x_base.config, '__file__', None)
+            init_path = getattr(x_base.config, "__file__", None)
             assert init_path is not None, "config package should have __init__.py"
 
     def test_cache_config_exists(self):
         """Test that cache_config.yaml exists in the package."""
         try:
-            config_package = resources.files('x_base.config')
-            config_file = config_package.joinpath('cache_config.yaml')
+            config_package = resources.files("x_base.config")
+            config_file = config_package.joinpath("cache_config.yaml")
             assert config_file.exists(), "cache_config.yaml should exist in x_base.config"
         except AttributeError:
-            import x_base.config as config_module
             import os
-            config_path = os.path.join(os.path.dirname(config_module.__file__), 'cache_config.yaml')
+
+            import x_base.config as config_module
+
+            config_path = os.path.join(os.path.dirname(config_module.__file__), "cache_config.yaml")
             assert os.path.exists(config_path), f"cache_config.yaml should exist at {config_path}"
 
     def test_cache_config_is_valid_yaml(self):
@@ -139,8 +148,7 @@ class TestCacheConfigLoading:
                 if not (MAG_RATIO_MIN <= ratio <= MAG_RATIO_MAX):
                     invalid_values.append(f"{model}[{i}]={ratio}")
 
-        assert not invalid_values, \
-            f"Values outside range [{MAG_RATIO_MIN}, {MAG_RATIO_MAX}]: {invalid_values}"
+        assert not invalid_values, f"Values outside range [{MAG_RATIO_MIN}, {MAG_RATIO_MAX}]: {invalid_values}"
 
 
 # ============================================================
@@ -152,13 +160,15 @@ class TestQuantConfigLoading:
     def test_quant_config_exists(self):
         """Test that quant_config.yaml exists in the package."""
         try:
-            config_package = resources.files('x_base.config')
-            config_file = config_package.joinpath('quant_config.yaml')
+            config_package = resources.files("x_base.config")
+            config_file = config_package.joinpath("quant_config.yaml")
             assert config_file.exists(), "quant_config.yaml should exist in x_base.config"
         except AttributeError:
-            import x_base.config as config_module
             import os
-            config_path = os.path.join(os.path.dirname(config_module.__file__), 'quant_config.yaml')
+
+            import x_base.config as config_module
+
+            config_path = os.path.join(os.path.dirname(config_module.__file__), "quant_config.yaml")
             assert os.path.exists(config_path), f"quant_config.yaml should exist at {config_path}"
 
     def test_quant_config_is_valid_yaml(self):
@@ -219,8 +229,8 @@ class TestQuantLayerConfig:
         import types
 
         # Create mock torch modules
-        torch_mock = types.ModuleType('torch')
-        nn_mock = types.ModuleType('torch.nn')
+        torch_mock = types.ModuleType("torch")
+        nn_mock = types.ModuleType("torch.nn")
 
         # Create proper Module base class
         class MockModule:
@@ -240,45 +250,49 @@ class TestQuantLayerConfig:
         torch_mock.nn = nn_mock
 
         # Register mocks
-        original_torch = sys.modules.get('torch')
-        original_torch_nn = sys.modules.get('torch.nn')
-        sys.modules['torch'] = torch_mock
-        sys.modules['torch.nn'] = nn_mock
+        original_torch = sys.modules.get("torch")
+        original_torch_nn = sys.modules.get("torch.nn")
+        sys.modules["torch"] = torch_mock
+        sys.modules["torch.nn"] = nn_mock
 
         yield
 
         # Restore original modules
         if original_torch:
-            sys.modules['torch'] = original_torch
+            sys.modules["torch"] = original_torch
         if original_torch_nn:
-            sys.modules['torch.nn'] = original_torch_nn
+            sys.modules["torch.nn"] = original_torch_nn
 
     def test_import_quant_layer_config(self):
         """Test that QuantLayerConfig can be imported."""
         from x_base.config.config_loader import QuantLayerConfig
+
         assert QuantLayerConfig is not None
 
     def test_default_w4a4_patterns(self):
         """Test that default w4a4_patterns are correct."""
         from x_base.config.config_loader import QuantLayerConfig
+
         config = QuantLayerConfig()
 
         expected_patterns = ["to_k", "to_v", "to_q", "to_out", "proj"]
-        assert config.w4a4_patterns == expected_patterns, \
-            f"Expected {expected_patterns}, got {config.w4a4_patterns}"
+        assert config.w4a4_patterns == expected_patterns, f"Expected {expected_patterns}, got {config.w4a4_patterns}"
 
     def test_default_w4a4_block_patterns(self):
         """Test that default w4a4_block_patterns are correct."""
         from x_base.config.config_loader import QuantLayerConfig
+
         config = QuantLayerConfig()
 
         expected_blocks = ["blocks"]
-        assert config.w4a4_block_patterns == expected_blocks, \
-            f"Expected {expected_blocks}, got {config.w4a4_block_patterns}"
+        assert (
+            config.w4a4_block_patterns == expected_blocks
+        ), f"Expected {expected_blocks}, got {config.w4a4_block_patterns}"
 
     def test_should_use_w4a4_with_blocks_and_proj(self):
         """Test should_use_w4a4 returns True for layers matching both patterns."""
         from x_base.config.config_loader import QuantLayerConfig
+
         config = QuantLayerConfig()
 
         assert config.should_use_w4a4("blocks.0.attn.to_k")
@@ -288,6 +302,7 @@ class TestQuantLayerConfig:
     def test_should_use_w4a4_without_blocks(self):
         """Test should_use_w4a4 returns False when blocks pattern missing."""
         from x_base.config.config_loader import QuantLayerConfig
+
         config = QuantLayerConfig()
 
         assert not config.should_use_w4a4("attn.to_k")
@@ -296,6 +311,7 @@ class TestQuantLayerConfig:
     def test_should_use_w4a4_without_w4a4_patterns(self):
         """Test should_use_w4a4 returns False when w4a4 pattern missing."""
         from x_base.config.config_loader import QuantLayerConfig
+
         config = QuantLayerConfig()
 
         assert not config.should_use_w4a4("blocks.0.mlp.fc1")
@@ -305,10 +321,7 @@ class TestQuantLayerConfig:
         """Test QuantLayerConfig.from_dict with custom w4a4 config."""
         from x_base.config.config_loader import QuantLayerConfig
 
-        config_dict = {
-            "w4a4_patterns": ["custom_k", "custom_v"],
-            "w4a4_block_patterns": ["custom_blocks", "layers"]
-        }
+        config_dict = {"w4a4_patterns": ["custom_k", "custom_v"], "w4a4_block_patterns": ["custom_blocks", "layers"]}
         config = QuantLayerConfig.from_dict(config_dict)
 
         assert config.w4a4_patterns == ["custom_k", "custom_v"]
@@ -316,8 +329,8 @@ class TestQuantLayerConfig:
 
     def test_should_quantize_with_exclude_patterns(self):
         """Test should_quantize correctly excludes patterns."""
-        from x_base.config.config_loader import QuantLayerConfig
         import torch.nn as nn
+        from x_base.config.config_loader import QuantLayerConfig
 
         config = QuantLayerConfig(exclude_patterns=["lora", "timesteps"])
         layer = nn.Linear(64, 64)
@@ -332,8 +345,8 @@ class TestQuantLayerConfig:
         The mock setup happens BEFORE config_loader import, so the parsed_layer_types
         in QuantLayerConfig will match our mocked nn.Linear.
         """
-        from x_base.config.config_loader import QuantLayerConfig
         import torch.nn as nn
+        from x_base.config.config_loader import QuantLayerConfig
 
         config = QuantLayerConfig(include_patterns=["img_mlp", "txt_mlp"])
         layer = nn.Linear(64, 64)
@@ -371,8 +384,8 @@ class TestQuantConfigManager:
         import sys
         import types
 
-        torch_mock = types.ModuleType('torch')
-        nn_mock = types.ModuleType('torch.nn')
+        torch_mock = types.ModuleType("torch")
+        nn_mock = types.ModuleType("torch.nn")
 
         # Create proper Module base class
         class MockModule:
@@ -391,21 +404,22 @@ class TestQuantConfigManager:
         nn_mock.Conv3d = MockModule
         torch_mock.nn = nn_mock
 
-        original_torch = sys.modules.get('torch')
-        original_torch_nn = sys.modules.get('torch.nn')
-        sys.modules['torch'] = torch_mock
-        sys.modules['torch.nn'] = nn_mock
+        original_torch = sys.modules.get("torch")
+        original_torch_nn = sys.modules.get("torch.nn")
+        sys.modules["torch"] = torch_mock
+        sys.modules["torch.nn"] = nn_mock
 
         yield
 
         if original_torch:
-            sys.modules['torch'] = original_torch
+            sys.modules["torch"] = original_torch
         if original_torch_nn:
-            sys.modules['torch.nn'] = original_torch_nn
+            sys.modules["torch.nn"] = original_torch_nn
 
     def test_get_default_config(self):
         """Test getting default config."""
         from x_base.config.config_loader import QuantConfigManager
+
         manager = QuantConfigManager()
         config = manager.get_config("default")
 
@@ -415,6 +429,7 @@ class TestQuantConfigManager:
     def test_get_qwen_image_config(self):
         """Test getting qwen_image config."""
         from x_base.config.config_loader import QuantConfigManager
+
         manager = QuantConfigManager()
         config = manager.get_config("qwen_image")
 
@@ -424,11 +439,13 @@ class TestQuantConfigManager:
     def test_detect_config_name_for_qwen(self):
         """Test auto-detecting config name for Qwen model."""
         from x_base.config.config_loader import QuantConfigManager
+
         manager = QuantConfigManager()
 
         # Mock transformer
         class MockQwenTransformer:
             pass
+
         MockQwenTransformer.__name__ = "QwenImageTransformer2DModel"
 
         config_name = manager.detect_config_name(MockQwenTransformer())
@@ -437,10 +454,12 @@ class TestQuantConfigManager:
     def test_detect_config_name_for_wan(self):
         """Test auto-detecting config name for Wan model."""
         from x_base.config.config_loader import QuantConfigManager
+
         manager = QuantConfigManager()
 
         class MockWanTransformer:
             pass
+
         MockWanTransformer.__name__ = "WanTransformer3DModel"
 
         config_name = manager.detect_config_name(MockWanTransformer())
@@ -449,10 +468,12 @@ class TestQuantConfigManager:
     def test_detect_config_name_unknown_returns_default(self):
         """Test that unknown model returns default config."""
         from x_base.config.config_loader import QuantConfigManager
+
         manager = QuantConfigManager()
 
         class UnknownModel:
             pass
+
         UnknownModel.__name__ = "SomeUnknownModel"
 
         config_name = manager.detect_config_name(UnknownModel())
@@ -480,45 +501,44 @@ class TestConfigIntegration:
 
     def test_old_cache_config_file_deleted(self):
         """Test that old cache/cache_config.yaml is deleted."""
-        import x_base.config as config_module
         import os
 
-        old_path = os.path.join(
-            os.path.dirname(config_module.__file__),
-            "..", "cache", "cache_config.yaml"
-        )
+        import x_base.config as config_module
+
+        old_path = os.path.join(os.path.dirname(config_module.__file__), "..", "cache", "cache_config.yaml")
         old_path = os.path.normpath(old_path)
 
-        assert not os.path.exists(old_path), \
-            f"Old cache_config.yaml should be deleted, but found at {old_path}"
+        assert not os.path.exists(old_path), f"Old cache_config.yaml should be deleted, but found at {old_path}"
+
 
 # ============================================================
 # Mocked Scenario Tests
 # ============================================================
 class TestConfigLoadingMocked:
     """Test suite for config loading with mocked scenarios."""
+
     def test_config_load_with_mock(self, sample_cache_config):
         """Test config loading with mocked YAML content."""
         mock_yaml_content = yaml.dump(sample_cache_config)
 
-        with patch('builtins.open', mock_open(read_data=mock_yaml_content)):
-            with open("mocked_config.yaml", 'r', encoding='utf-8') as f:
+        with patch("builtins.open", mock_open(read_data=mock_yaml_content)):
+            with open("mocked_config.yaml", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             assert config == sample_cache_config
 
     def test_config_load_handles_missing_file(self):
         """Test that config loading handles missing file gracefully."""
-        with patch('builtins.open', side_effect=FileNotFoundError("Config not found")):
+        with patch("builtins.open", side_effect=FileNotFoundError("Config not found")):  # noqa: SIM117
             with pytest.raises(FileNotFoundError):
-                with open("nonexistent.yaml", 'r') as f:
+                with open("nonexistent.yaml") as f:
                     yaml.safe_load(f)
 
     def test_config_load_handles_invalid_yaml(self):
         """Test that config loading handles invalid YAML gracefully."""
         invalid_yaml = "invalid: yaml: content: [unclosed"
 
-        with patch('builtins.open', mock_open(read_data=invalid_yaml)):
+        with patch("builtins.open", mock_open(read_data=invalid_yaml)):  # noqa: SIM117
             with pytest.raises(yaml.YAMLError):
-                with open("invalid.yaml", 'r') as f:
+                with open("invalid.yaml") as f:
                     yaml.safe_load(f)

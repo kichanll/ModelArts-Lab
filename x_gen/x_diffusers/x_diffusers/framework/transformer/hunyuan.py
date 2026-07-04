@@ -1,15 +1,13 @@
 import math
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
 import torch_npu
-
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.loaders import FromOriginalModelMixin, PeftAdapterMixin
-from diffusers.utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers
 from diffusers.models.attention import FeedForward
 from diffusers.models.attention_processor import Attention, AttentionProcessor
 from diffusers.models.cache_utils import CacheMixin
@@ -22,25 +20,25 @@ from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.normalization import AdaLayerNormContinuous, AdaLayerNormZero, AdaLayerNormZeroSingle
 from diffusers.models.transformers import transformer_hunyuan_video
 from diffusers.models.transformers.transformer_hunyuan_video import (
-    HunyuanVideoPatchEmbed,
-    HunyuanVideoTokenRefiner,
     HunyuanVideoConditionEmbedding,
+    HunyuanVideoPatchEmbed,
     HunyuanVideoSingleTransformerBlock,
-    HunyuanVideoTransformerBlock,
+    HunyuanVideoTokenRefiner,
     HunyuanVideoTokenReplaceAdaLayerNormZero,
     HunyuanVideoTokenReplaceAdaLayerNormZeroSingle,
     HunyuanVideoTokenReplaceSingleTransformerBlock,
     HunyuanVideoTokenReplaceTransformerBlock,
+    HunyuanVideoTransformerBlock,
 )
-
+from diffusers.utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers
 from x_base import (
-    all_to_all_before_attn,
+    ParallelManager,
     all_to_all_after_attn,
+    all_to_all_before_attn,
     gather_sequence,
     get_pad,
     set_pad,
     split_sequence,
-    ParallelManager,
 )
 
 
@@ -52,13 +50,13 @@ class HunyuanVideoAttnProcessor2_0:
             )
 
     def _apply_norms(
-            self,
-            attn: Attention,
-            query: torch.Tensor,
-            key: torch.Tensor,
-            encoder_query: Optional[torch.Tensor] = None,
-            encoder_key: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+        self,
+        attn: Attention,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        encoder_query: torch.Tensor | None = None,
+        encoder_key: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
         if attn.norm_q is not None:
             query = attn.norm_q(query)
             if attn.add_q_proj is None and encoder_query is not None:
@@ -70,41 +68,41 @@ class HunyuanVideoAttnProcessor2_0:
         return query, key, encoder_query, encoder_key
 
     def _apply_enc_proj_and_norm(
-            self,
-            attn: Attention,
-            encoder_hidden_states: torch.Tensor,
-            batch_size: int,
-            attn_heads: int,
-            head_dim: int,
-        ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-            encoder_query = attn.add_q_proj(encoder_hidden_states)
-            encoder_key = attn.add_k_proj(encoder_hidden_states)
-            encoder_value = attn.add_v_proj(encoder_hidden_states)
+        self,
+        attn: Attention,
+        encoder_hidden_states: torch.Tensor,
+        batch_size: int,
+        attn_heads: int,
+        head_dim: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        encoder_query = attn.add_q_proj(encoder_hidden_states)
+        encoder_key = attn.add_k_proj(encoder_hidden_states)
+        encoder_value = attn.add_v_proj(encoder_hidden_states)
 
-            if attn.parallel_manager is not None:
-                encoder_query, encoder_key, encoder_value = map(
-                    lambda x: split_sequence(x, attn.parallel_manager.sp_group, dim=2),
-                    [encoder_query, encoder_key, encoder_value],
-                )
+        if attn.parallel_manager is not None:
+            encoder_query, encoder_key, encoder_value = map(
+                lambda x: split_sequence(x, attn.parallel_manager.sp_group, dim=2),
+                [encoder_query, encoder_key, encoder_value],
+            )
 
-            encoder_query = encoder_query.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2)
-            encoder_key = encoder_key.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2)
-            encoder_value = encoder_value.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2)
+        encoder_query = encoder_query.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2)
+        encoder_key = encoder_key.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2)
+        encoder_value = encoder_value.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2)
 
-            if attn.norm_added_q is not None:
-                encoder_query = attn.norm_added_q(encoder_query)
-            if attn.norm_added_k is not None:
-                encoder_key = attn.norm_added_k(encoder_key)
+        if attn.norm_added_q is not None:
+            encoder_query = attn.norm_added_q(encoder_query)
+        if attn.norm_added_k is not None:
+            encoder_key = attn.norm_added_k(encoder_key)
 
-            return encoder_query, encoder_key, encoder_value
+        return encoder_query, encoder_key, encoder_value
 
     def __call__(
         self,
         attn: Attention,
         hidden_states: torch.Tensor,
-        encoder_hidden_states: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        image_rotary_emb: Optional[torch.Tensor] = None,
+        encoder_hidden_states: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        image_rotary_emb: torch.Tensor | None = None,
     ) -> torch.Tensor:
         text_seq_length = encoder_hidden_states.size(1)
 
@@ -133,7 +131,8 @@ class HunyuanVideoAttnProcessor2_0:
         if attn.parallel_manager is not None and attn.parallel_manager.sp_size > 1:
             if attn.heads % attn.parallel_manager.sp_size != 0:
                 raise ValueError(
-                    f"Number of heads {attn.heads} must be divisible by sequence parallel size {attn.parallel_manager.sp_size}")
+                    f"Number of heads {attn.heads} must be divisible by sequence parallel size {attn.parallel_manager.sp_size}"  # noqa: E501
+                )
             attn_heads = attn.heads // attn.parallel_manager.sp_size
             # normally we operate pad for every all2all. but for more convient implementation
             # we move pad operation to encoder add and remove in hunyuan
@@ -146,7 +145,7 @@ class HunyuanVideoAttnProcessor2_0:
                 encoder_query, encoder_key, encoder_value = map(
                     lambda x: split_sequence(x, attn.parallel_manager.sp_group, dim=2),
                     encoder_list,
-            )
+                )
         else:
             attn_heads = attn.heads
 
@@ -155,9 +154,11 @@ class HunyuanVideoAttnProcessor2_0:
 
         query, key, value = [x.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2) for x in [query, key, value]]
 
-
         if use_encoder_proj:
-            encoder_query, encoder_key, encoder_value = [x.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2) for x in [encoder_query, encoder_key, encoder_value]]
+            encoder_query, encoder_key, encoder_value = [
+                x.view(batch_size, -1, attn_heads, head_dim).transpose(1, 2)
+                for x in [encoder_query, encoder_key, encoder_value]
+            ]
 
         # 2. QK normalization
         query, key, encoder_query, encoder_key = self._apply_norms(attn, query, key, encoder_query, encoder_key)
@@ -169,8 +170,9 @@ class HunyuanVideoAttnProcessor2_0:
 
         # 4. Encoder condition QKV projection and normalization
         if attn.add_q_proj is not None and encoder_hidden_states is not None:  # 1 (dual)
-            encoder_query, encoder_key, encoder_value = self._apply_enc_proj_and_norm(attn, encoder_hidden_states,
-                                                                                      batch_size, attn_heads, head_dim)
+            encoder_query, encoder_key, encoder_value = self._apply_enc_proj_and_norm(
+                attn, encoder_hidden_states, batch_size, attn_heads, head_dim
+            )
 
         query = torch.cat([query, encoder_query], dim=2)
         key = torch.cat([key, encoder_key], dim=2)
@@ -178,8 +180,15 @@ class HunyuanVideoAttnProcessor2_0:
 
         # 5. Attention
         B, N, S, D = query.shape
-        hidden_states = torch_npu.npu_fusion_attention(query, key, value, head_num=N, input_layout="BNSD", keep_prob=1.0,
-            scale=(1 / math.sqrt(D)), atten_mask=attention_mask,
+        hidden_states = torch_npu.npu_fusion_attention(
+            query,
+            key,
+            value,
+            head_num=N,
+            input_layout="BNSD",
+            keep_prob=1.0,
+            scale=(1 / math.sqrt(D)),
+            atten_mask=attention_mask,
         )[0]
 
         hidden_states = hidden_states.transpose(1, 2).flatten(2, 3)
@@ -188,10 +197,9 @@ class HunyuanVideoAttnProcessor2_0:
         )
 
         if attn.parallel_manager is not None and attn.parallel_manager.sp_size > 1:
-            hidden_states = all_to_all_after_attn(hidden_states,
-                                                  process_group=attn.parallel_manager.sp_group,
-                                                  scatter_dim=1,
-                                                  gather_dim=2)
+            hidden_states = all_to_all_after_attn(
+                hidden_states, process_group=attn.parallel_manager.sp_group, scatter_dim=1, gather_dim=2
+            )
             encoder_hidden_states = gather_sequence(encoder_hidden_states, attn.parallel_manager.sp_group, dim=2)
 
         # 6. Output projection
@@ -207,7 +215,7 @@ class HunyuanVideoAttnProcessor2_0:
 
 
 class HunyuanVideoRotaryPosEmbed(nn.Module):
-    def __init__(self, patch_size: int, patch_size_t: int, rope_dim: List[int], theta: float = 256.0) -> None:
+    def __init__(self, patch_size: int, patch_size_t: int, rope_dim: list[int], theta: float = 256.0) -> None:
         super().__init__()
 
         self.patch_size = patch_size
@@ -215,8 +223,8 @@ class HunyuanVideoRotaryPosEmbed(nn.Module):
         self.rope_dim = rope_dim
         self.theta = theta
 
-        self.cache_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
-        self.cache_rope_sizes: Optional[Tuple[int, int, int]] = None  # T, H, W
+        self.cache_emb: tuple[torch.Tensor, torch.Tensor] | None = None
+        self.cache_rope_sizes: tuple[int, int, int] | None = None  # T, H, W
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         batch_size, num_channels, num_frames, height, width = hidden_states.shape
@@ -253,7 +261,7 @@ class HunyuanVideoRotaryPosEmbed(nn.Module):
         return self.cache_emb
 
 
-class HunyuanVideoSingleTransformerBlock(nn.Module):
+class HunyuanVideoSingleTransformerBlock(nn.Module):  # noqa: F811
     def __init__(
         self,
         num_attention_heads: int,
@@ -267,11 +275,16 @@ class HunyuanVideoSingleTransformerBlock(nn.Module):
         mlp_dim = int(hidden_size * mlp_ratio)
 
         self.attn = Attention(
-            query_dim=hidden_size, cross_attention_dim=None,
-            dim_head=attention_head_dim, heads=num_attention_heads,
-            out_dim=hidden_size, bias=True,
-            processor=HunyuanVideoAttnProcessor2_0(), qk_norm=qk_norm,
-            eps=1e-6, pre_only=True,
+            query_dim=hidden_size,
+            cross_attention_dim=None,
+            dim_head=attention_head_dim,
+            heads=num_attention_heads,
+            out_dim=hidden_size,
+            bias=True,
+            processor=HunyuanVideoAttnProcessor2_0(),
+            qk_norm=qk_norm,
+            eps=1e-6,
+            pre_only=True,
         )
 
         self.attn.parallel_manager = None
@@ -285,8 +298,8 @@ class HunyuanVideoSingleTransformerBlock(nn.Module):
         hidden_states: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
         temb: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        attention_mask: torch.Tensor | None = None,
+        image_rotary_emb: tuple[torch.Tensor, torch.Tensor] | None = None,
         *args,
         **kwargs,
     ) -> torch.Tensor:
@@ -308,7 +321,8 @@ class HunyuanVideoSingleTransformerBlock(nn.Module):
         attn_output, context_attn_output = self.attn(
             hidden_states=norm_hidden_states,
             encoder_hidden_states=norm_encoder_hidden_states,
-            attention_mask=attention_mask, image_rotary_emb=image_rotary_emb,
+            attention_mask=attention_mask,
+            image_rotary_emb=image_rotary_emb,
         )
         attn_output = torch.cat([attn_output, context_attn_output], dim=1)
 
@@ -318,12 +332,13 @@ class HunyuanVideoSingleTransformerBlock(nn.Module):
         hidden_states = hidden_states + residual
 
         hidden_states, encoder_hidden_states = (
-            hidden_states[:, :-text_seq_length, :], hidden_states[:, -text_seq_length:, :],
+            hidden_states[:, :-text_seq_length, :],
+            hidden_states[:, -text_seq_length:, :],
         )
         return hidden_states, encoder_hidden_states
 
 
-class HunyuanVideoTransformerBlock(nn.Module):
+class HunyuanVideoTransformerBlock(nn.Module):  # noqa: F811
     def __init__(
         self,
         num_attention_heads: int,
@@ -348,7 +363,8 @@ class HunyuanVideoTransformerBlock(nn.Module):
             context_pre_only=False,
             bias=True,
             processor=HunyuanVideoAttnProcessor2_0(),
-            qk_norm=qk_norm, eps=1e-6,
+            qk_norm=qk_norm,
+            eps=1e-6,
         )
 
         self.attn.parallel_manager = None
@@ -362,11 +378,11 @@ class HunyuanVideoTransformerBlock(nn.Module):
         hidden_states: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
         temb: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        freqs_cis: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        attention_mask: torch.Tensor | None = None,
+        freqs_cis: tuple[torch.Tensor, torch.Tensor] | None = None,
         *args,
         **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         # 1. Input normalization
         norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(hidden_states, emb=temb)
         norm_encoder_hidden_states, c_gate_msa, c_shift_mlp, c_scale_mlp, c_gate_mlp = self.norm1_context(
@@ -377,7 +393,8 @@ class HunyuanVideoTransformerBlock(nn.Module):
         attn_output, context_attn_output = self.attn(
             hidden_states=norm_hidden_states,
             encoder_hidden_states=norm_encoder_hidden_states,
-            attention_mask=attention_mask, image_rotary_emb=freqs_cis,
+            attention_mask=attention_mask,
+            image_rotary_emb=freqs_cis,
         )
 
         # 3. Modulation and residual connection
@@ -400,7 +417,7 @@ class HunyuanVideoTransformerBlock(nn.Module):
         return hidden_states, encoder_hidden_states
 
 
-class HunyuanVideoTokenReplaceSingleTransformerBlock(nn.Module):
+class HunyuanVideoTokenReplaceSingleTransformerBlock(nn.Module):  # noqa: F811
     def __init__(
         self,
         num_attention_heads: int,
@@ -438,8 +455,8 @@ class HunyuanVideoTokenReplaceSingleTransformerBlock(nn.Module):
         hidden_states: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
         temb: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        attention_mask: torch.Tensor | None = None,
+        image_rotary_emb: tuple[torch.Tensor, torch.Tensor] | None = None,
         token_replace_emb: torch.Tensor = None,
         num_tokens: int = None,
     ) -> torch.Tensor:
@@ -482,7 +499,7 @@ class HunyuanVideoTokenReplaceSingleTransformerBlock(nn.Module):
         return hidden_states, encoder_hidden_states
 
 
-class HunyuanVideoTokenReplaceTransformerBlock(nn.Module):
+class HunyuanVideoTokenReplaceTransformerBlock(nn.Module):  # noqa: F811
     def __init__(
         self,
         num_attention_heads: int,
@@ -524,11 +541,11 @@ class HunyuanVideoTokenReplaceTransformerBlock(nn.Module):
         hidden_states: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
         temb: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        freqs_cis: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        attention_mask: torch.Tensor | None = None,
+        freqs_cis: tuple[torch.Tensor, torch.Tensor] | None = None,
         token_replace_emb: torch.Tensor = None,
         num_tokens: int = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         # 1. Input normalization
         (
             norm_hidden_states,
@@ -649,15 +666,15 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         text_embed_dim: int = 4096,
         pooled_projection_dim: int = 768,
         rope_theta: float = 256.0,
-        rope_axes_dim: Tuple[int] = (16, 56, 56),
-        image_condition_type: Optional[str] = None,
+        rope_axes_dim: tuple[int] = (16, 56, 56),
+        image_condition_type: str | None = None,
     ) -> None:
         super().__init__()
 
         supported_image_condition_types = ["latent_concat", "token_replace"]
         if image_condition_type is not None and image_condition_type not in supported_image_condition_types:
             raise ValueError(
-                f"Invalid `image_condition_type` ({image_condition_type}). Supported ones are: {supported_image_condition_types}"
+                f"Invalid `image_condition_type` ({image_condition_type}). Supported ones are: {supported_image_condition_types}"  # noqa: E501
             )
 
         inner_dim = num_attention_heads * attention_head_dim
@@ -723,7 +740,6 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         self.parallel_manager = None
         self.gradient_checkpointing = False
 
-
     def enable_parallel(self, dp_size, sp_size, enable_cp, ulysses_size, ring_size):
         # update cfg parallel
         cp_size = 1
@@ -740,7 +756,7 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
 
     @property
     # Copied from diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.attn_processors
-    def attn_processors(self) -> Dict[str, AttentionProcessor]:
+    def attn_processors(self) -> dict[str, AttentionProcessor]:
         r"""
         Returns:
             `dict` of attention processors: A dictionary containing all attention processors used in the model with
@@ -748,7 +764,7 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         """
         processors = {}
 
-        def fn_recursive_add_processors(name: str, module: torch.nn.Module, processors: Dict[str, AttentionProcessor]):
+        def fn_recursive_add_processors(name: str, module: torch.nn.Module, processors: dict[str, AttentionProcessor]):
             if hasattr(module, "get_processor"):
                 processors[f"{name}.processor"] = module.get_processor()
 
@@ -763,7 +779,7 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         return processors
 
     # Copied from diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.set_attn_processor
-    def set_attn_processor(self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]]):
+    def set_attn_processor(self, processor: AttentionProcessor | dict[str, AttentionProcessor]):
         r"""
         Sets the attention processor to use to compute attention.
 
@@ -803,7 +819,7 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
 
             rank = dist.get_rank()
 
-            # Compute how many full "buckets" of tokens of size equal to hidden_states.size(1) fit into first_frame_num_tokens
+            # Compute how many full "buckets" of tokens of size equal to hidden_states.size(1) fit into first_frame_num_tokens  # noqa: E501
             bucket = max((first_frame_num_tokens - 1) // hidden_states.size(1), 0)
 
             # Compute how many tokens are left over after distributing full buckets across ranks
@@ -823,15 +839,16 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         return hidden_states
 
     def forward(
-        self, hidden_states: torch.Tensor,
+        self,
+        hidden_states: torch.Tensor,
         timestep: torch.LongTensor,
         encoder_hidden_states: torch.Tensor,
         encoder_attention_mask: torch.Tensor,
         pooled_projections: torch.Tensor,
         guidance: torch.Tensor = None,
-        attention_kwargs: Optional[Dict[str, Any]] = None,
+        attention_kwargs: dict[str, Any] | None = None,
         return_dict: bool = True,
-    ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+    ) -> torch.Tensor | dict[str, torch.Tensor]:
         if attention_kwargs is not None:
             attention_kwargs = attention_kwargs.copy()
             lora_scale = attention_kwargs.pop("scale", 1.0)
@@ -843,9 +860,7 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
             scale_lora_layers(self, lora_scale)
         else:
             if attention_kwargs is not None and attention_kwargs.get("scale", None) is not None:
-                print(
-                    "Passing a `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
-                )
+                print("Passing a `scale` via `attention_kwargs` when not using the PEFT backend is ineffective.")
 
         if self.parallel_manager is not None and self.parallel_manager.cp_size > 1:
             raise NotImplementedError("cp_size > 1 is not supported for now.")
@@ -882,13 +897,16 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         # [B, 1, 1, N], for broadcasting across attention heads
         attention_mask = attention_mask.unsqueeze(1).unsqueeze(1)
 
-        hidden_states, first_frame_num_tokens = self._split_sequence_before_blocks(hidden_states, first_frame_num_tokens)
+        hidden_states, first_frame_num_tokens = self._split_sequence_before_blocks(
+            hidden_states, first_frame_num_tokens
+        )
 
         # 4. Transformer blocks
         if torch.is_grad_enabled() and self.gradient_checkpointing:
             for block in self.transformer_blocks:
                 hidden_states, encoder_hidden_states = self._gradient_checkpointing_func(
-                    block, hidden_states,
+                    block,
+                    hidden_states,
                     encoder_hidden_states,
                     temb,
                     attention_mask,
@@ -939,8 +957,7 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         hidden_states = self.proj_out(hidden_states)
 
         hidden_states = hidden_states.reshape(
-            batch_size, post_patch_num_frames, post_patch_height,
-            post_patch_width, -1, p_t, p, p
+            batch_size, post_patch_num_frames, post_patch_height, post_patch_width, -1, p_t, p, p
         )
         hidden_states = hidden_states.permute(0, 4, 1, 5, 2, 6, 3, 7)
         hidden_states = hidden_states.flatten(6, 7).flatten(4, 5).flatten(2, 3)
@@ -958,6 +975,8 @@ class HunyuanVideoTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
 transformer_hunyuan_video.HunyuanVideoRotaryPosEmbed = HunyuanVideoRotaryPosEmbed
 transformer_hunyuan_video.HunyuanVideoSingleTransformerBlock = HunyuanVideoSingleTransformerBlock
 transformer_hunyuan_video.HunyuanVideoTransformerBlock = HunyuanVideoTransformerBlock
-transformer_hunyuan_video.HunyuanVideoTokenReplaceSingleTransformerBlock = HunyuanVideoTokenReplaceSingleTransformerBlock
+transformer_hunyuan_video.HunyuanVideoTokenReplaceSingleTransformerBlock = (
+    HunyuanVideoTokenReplaceSingleTransformerBlock
+)
 transformer_hunyuan_video.HunyuanVideoTokenReplaceTransformerBlock = HunyuanVideoTokenReplaceTransformerBlock
 transformer_hunyuan_video.HunyuanVideoTransformer3DModel = HunyuanVideoTransformer3DModel

@@ -11,10 +11,7 @@ No sys.modules mocking is needed as we test mathematical operations and shapes.
 
 import math
 
-import pytest
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 
 class TestAscendCogVideoXCausalConv3d:
@@ -80,7 +77,7 @@ class TestAscendCogVideoXCausalConv3d:
         inputs = torch.randn(1, 64, 5, 60, 104)
 
         # conv_cache is last (time_kernel_size - 1) frames
-        conv_cache = inputs[:, :, -time_kernel_size + 1:].clone()
+        conv_cache = inputs[:, :, -time_kernel_size + 1 :].clone()
 
         assert conv_cache.shape == (1, 64, 2, 60, 104)
 
@@ -94,8 +91,8 @@ class TestAscendAutoencoderKLCogVideoXConfig:
         out_channels = 3
         latent_channels = 16
         block_out_channels = (128, 256, 256, 512)
-        layers_per_block = 3
-        act_fn = "silu"
+        layers_per_block = 3  # noqa: F841
+        act_fn = "silu"  # noqa: F841
         temporal_compression_ratio = 4
 
         # Verify input/output consistency
@@ -220,28 +217,32 @@ class TestSlicingTiling:
     def test_use_slicing_default(self):
         """Test use_slicing default."""
         use_slicing = False
-        assert use_slicing == False
+        assert use_slicing == False  # noqa: E712
 
     def test_use_tiling_default(self):
         """Test use_tiling default."""
         use_tiling = False
-        assert use_tiling == False
+        assert use_tiling == False  # noqa: E712
 
     def test_enable_slicing(self):
         """Test enable_slicing sets flag."""
         use_slicing = False
+
         # Simulate enable_slicing() call
         def enable_slicing():
             return True
+
         use_slicing = enable_slicing()
         assert use_slicing is True
 
     def test_enable_tiling(self):
         """Test enable_tiling sets flag."""
         use_tiling = False
+
         # Simulate enable_tiling() call
         def enable_tiling():
             return True
+
         use_tiling = enable_tiling()
         assert use_tiling is True
 
@@ -252,7 +253,7 @@ class TestClassAttributes:
     def test_supports_gradient_checkpointing(self):
         """Test gradient checkpointing support."""
         _supports_gradient_checkpointing = True
-        assert _supports_gradient_checkpointing == True
+        assert _supports_gradient_checkpointing == True  # noqa: E712
 
     def test_no_split_modules(self):
         """Test no split modules."""

@@ -7,15 +7,14 @@ This module provides:
 - Test isolation to prevent sys.modules pollution
 """
 
-import sys
 import abc
 import importlib.util
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import torch
 import pytest
-
+import torch
 
 # ============================================================================
 # Test Isolation
@@ -84,14 +83,12 @@ def pytest_configure(config):
             config._framework_original_modules[module_name] = sys.modules[module_name]
 
     # Register markers
-    config.addinivalue_line(
-        "markers", "framework_test: mark test as a framework test that uses mocks"
-    )
+    config.addinivalue_line("markers", "framework_test: mark test as a framework test that uses mocks")
 
 
 def pytest_unconfigure(config):
     """Restore original sys.modules state after all tests complete."""
-    if hasattr(config, '_framework_original_modules'):
+    if hasattr(config, "_framework_original_modules"):
         for module_name in _ISOLATED_MODULES:
             if module_name in config._framework_original_modules:
                 sys.modules[module_name] = config._framework_original_modules[module_name]
@@ -128,7 +125,7 @@ def isolate_framework_module(request):
         yield
         return
 
-    module_file = getattr(test_module, '__file__', None)
+    module_file = getattr(test_module, "__file__", None)
     if module_file is None:
         yield
         return
@@ -136,10 +133,7 @@ def isolate_framework_module(request):
     framework_tests_dir = Path(__file__).parent
     test_path = Path(module_file)
 
-    is_framework_test = (
-        framework_tests_dir in test_path.parents or
-        test_path.parent == framework_tests_dir
-    )
+    is_framework_test = framework_tests_dir in test_path.parents or test_path.parent == framework_tests_dir
 
     if not is_framework_test:
         yield
@@ -165,8 +159,10 @@ def isolate_framework_module(request):
 # Mock Classes
 # ============================================================================
 
-class MockBaseTunerLayer(abc.ABC):
+
+class MockBaseTunerLayer(abc.ABC):  # noqa: B024
     """Mock BaseTunerLayer with ABCMeta metaclass."""
+
     def __init__(self, base_layer):
         self.base_layer = base_layer
         self.r = {}
@@ -183,35 +179,40 @@ class MockBaseTunerLayer(abc.ABC):
     def get_base_layer(self):
         return self.base_layer
 
-    def update_layer(self, *args, **kwargs):
+    def update_layer(self, *args, **kwargs):  # noqa: B027
         pass
 
 
 class MockLoraLayer(MockBaseTunerLayer):
     """Mock LoraLayer with ABCMeta metaclass."""
+
     adapter_layer_names = ("lora_A", "lora_B")
     other_param_names = ("r", "lora_alpha", "scaling", "lora_dropout")
 
 
 class MockWeightQuantLinearModule(torch.nn.Module):
     """Mock WeightQuantLinearModule class for isinstance checks."""
+
     def __init__(self, *args, **kwargs):
         super().__init__()
 
 
 class MockConfigMixin:
     """Mock ConfigMixin from diffusers."""
+
     def __init__(self, *args, **kwargs):
         pass
 
 
 class MockSchedulerMixin:
     """Mock SchedulerMixin from diffusers."""
+
     pass
 
 
 class MockBaseOutput:
     """Mock BaseOutput from diffusers.utils."""
+
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -220,6 +221,7 @@ class MockBaseOutput:
 # ============================================================================
 # Module Loading
 # ============================================================================
+
 
 def load_module_directly(module_name: str, file_path: str):
     """
@@ -248,6 +250,7 @@ def load_module_directly(module_name: str, file_path: str):
 # ============================================================================
 # Mock Setup Functions
 # ============================================================================
+
 
 def setup_diffusers_mock():
     """
@@ -356,10 +359,10 @@ def setup_peft_mock():
     mock_peft.tuners.tuners_utils.BaseTunerLayer = MockBaseTunerLayer
 
     # Create individual dispatch function mocks
-    for name in ['aqlm', 'awq', 'eetq', 'gptq', 'hqq', 'torchao']:
+    for name in ["aqlm", "awq", "eetq", "gptq", "hqq", "torchao"]:
         module = MagicMock()
         setattr(mock_peft.tuners.lora, name, module)
-        setattr(module, f'dispatch_{name}', MagicMock(return_value=None))
+        setattr(module, f"dispatch_{name}", MagicMock(return_value=None))
 
     # tp_layer special case
     tp_layer = MagicMock()
@@ -423,6 +426,7 @@ def cleanup_mocks():
 # ============================================================================
 # Path Helpers
 # ============================================================================
+
 
 def get_x_diffusers_path():
     """Get the path to x_diffusers package."""

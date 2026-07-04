@@ -1,9 +1,10 @@
+import logging
 import shutil
 from pathlib import Path
-from typing import Optional
-import logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class FileUtil:
     """文件操作工具类"""
@@ -33,7 +34,8 @@ class FileUtil:
             shutil.copy2(src, dst)
             return True
         except Exception as e:
-            logger.info(f"文件复制失败: {e}")
+            logger.info(f"文件复制失败: {e}")  # noqa: G004
             return False
+
 
 file_util = FileUtil()

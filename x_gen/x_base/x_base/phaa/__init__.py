@@ -1,8 +1,7 @@
 from .globals import (
-    enable_phaa,
-    is_phaa_enabled,
-    set_phaa_split_num,
-    get_phaa_split_num,
+    enable_phaa,  # noqa: F401
+    get_phaa_split_num,  # noqa: F401
+    is_phaa_enabled,  # noqa: F401
+    set_phaa_split_num,  # noqa: F401
 )
-
-from .utils import phaa_on_pipe
+from .utils import phaa_on_pipe  # noqa: F401

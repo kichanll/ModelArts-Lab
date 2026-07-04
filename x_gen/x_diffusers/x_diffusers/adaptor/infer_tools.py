@@ -1,26 +1,42 @@
-import os
 import csv
-import shutil
-import random
-from itertools import product
-import time
-from copy import deepcopy
-import torch.distributed as dist
-import math
-import numpy as np
-import torch
-from diffusers.utils import export_to_video, load_image, logging
-from PIL import Image, ImageEnhance
-import ffmpeg
 import gc
 import inspect
+import math
+import os
+import random
+import time
+from copy import deepcopy
+from itertools import product
 
-from .load_pipe import load_pipe, load_v2v_pipe, load_seedvr2_pipe, update_scheduler, update_lora, update_pipe, \
-    pipe_to_device
-from x_base import (infer_info, prepare_video_and_mask, attention_manager,
-                    read_text, list_cases, split_rectangle, lcm, floor_to_multiple, get_patch_hw)
-from ..framework.vae.wan import vfi
+import ffmpeg
+import numpy as np
+import torch
+import torch.distributed as dist
+from diffusers.utils import export_to_video, load_image, logging
+from PIL import Image, ImageEnhance
+from x_base import (
+    attention_manager,
+    floor_to_multiple,
+    get_patch_hw,
+    infer_info,
+    lcm,
+    list_cases,
+    prepare_video_and_mask,
+    read_text,
+    split_rectangle,
+)
+
 from ..framework.vae.IFRNet_S_arch import IRFNet_S
+from ..framework.vae.wan import vfi
+from .load_pipe import (
+    load_pipe,
+    load_seedvr2_pipe,
+    load_v2v_pipe,
+    pipe_to_device,
+    update_lora,
+    update_pipe,
+    update_scheduler,
+)
 
 logger = logging.get_logger("infer")
 
@@ -43,7 +59,7 @@ GUIDANCE_SCALE_MAP = {
 }
 
 
-class InferenceManager(object):
+class InferenceManager:
     def __init__(self):
         self.init_args = None
         self.pipe = None
@@ -85,7 +101,7 @@ class InferenceManager(object):
         aspect_ratio = img_h / img_w
 
         max_area = int(height) * int(width)
-        base_h, base_w = int(height), int(width)
+        base_h, base_w = int(height), int(width)  # noqa: F841
 
         # ---- model factors ----
         s = int(self.pipe.vae_scale_factor_spatial)  # 空间压缩率，例如 8
@@ -118,20 +134,20 @@ class InferenceManager(object):
 
         # ---- derived diagnostics ----
         new_lat_h, new_lat_w = new_h // s, new_w // s
-        tile_lat_h, tile_lat_w = new_lat_h / num_rows, new_lat_w / num_cols  # 期望是整数
+        tile_lat_h, tile_lat_w = new_lat_h / num_rows, new_lat_w / num_cols  # 期望是整数  # noqa: F841
 
         if getattr(self, "rank", 0) == 0:
-            logger.info(f"[wan_image_preprocess] original_hw=({img_h},{img_w}) -> final_hw=({new_h},{new_w})")
+            logger.info(f"[wan_image_preprocess] original_hw=({img_h},{img_w}) -> final_hw=({new_h},{new_w})")  # noqa: G004
 
         return new_h, new_w
 
     @staticmethod
     def ada_bright_image_preprocess(image, args):
         if args.ada_brighten:
-            img_gray = image.convert('L')
+            img_gray = image.convert("L")
             pixels = list(img_gray.getdata())
             img_lum = sum(pixels) / len(pixels)
-            args.ada_brighten = (img_lum > 190)
+            args.ada_brighten = img_lum > 190
             infer_info.update_adabrighten(args.ada_brighten)
         if args.ada_brighten:
             enhancer = ImageEnhance.Brightness(image)
@@ -150,24 +166,23 @@ class InferenceManager(object):
         return out
 
     @staticmethod
-    def change_fps_filter(input_path, output_path, out_fps=32, out_crf='10'):
+    def change_fps_filter(input_path, output_path, out_fps=32, out_crf="10"):
         try:
             output_dir = os.path.dirname(output_path)
             if output_dir and not os.path.exists(output_dir):
                 os.makedirs(output_dir, exist_ok=True)  # exist_ok=True 避免目录已存在时报错
-                logger.info(f"自动创建输出目录成功 → {output_dir}")
+                logger.info(f"自动创建输出目录成功 → {output_dir}")  # noqa: G004
             stream = (
-                ffmpeg
-                .input(input_path)
-                .filter('fps', fps=out_fps, round='near')
-                .output(output_path, vcodec='libx264', preset='fast', crf=out_crf, acodec='copy', loglevel='error')
+                ffmpeg.input(input_path)
+                .filter("fps", fps=out_fps, round="near")
+                .output(output_path, vcodec="libx264", preset="fast", crf=out_crf, acodec="copy", loglevel="error")
                 .overwrite_output()
             )
             ffmpeg.run(stream)
             os.remove(input_path)
             os.rename(output_path, input_path)
         except ffmpeg.Error as e:
-            logger.error(f'高分辨率失败：{str(e)}')
+            logger.error(f"高分辨率失败：{str(e)}")  # noqa: G004
 
     def save_output(self, output, save_path, args):
         if args.task_type == "i2v" or args.task_type == "t2v":
@@ -269,7 +284,7 @@ class InferenceManager(object):
         all_case_dirs = list_cases(args.batch_test_input_dir)
         if args.batch_test_sample_size > 0 and len(all_case_dirs) > args.batch_test_sample_size:
             # 固定随机种子，保证每次运行抽样的 case 都是一样的
-            random.seed(args.seed if hasattr(args, 'seed') else 42)
+            random.seed(args.seed if hasattr(args, "seed") else 42)
             return random.sample(all_case_dirs, args.batch_test_sample_size)
         return all_case_dirs
 
@@ -277,7 +292,7 @@ class InferenceManager(object):
         """执行速度测试逻辑"""
         report_path = os.path.join(args.batch_test_report_dir, "report_speed.csv")
         if rank == 0:
-            logger.info(f">>> 启动 [速度验证] 测试，共 {len(sampled_dirs)} 个 case...\n")
+            logger.info(f">>> 启动 [速度验证] 测试，共 {len(sampled_dirs)} 个 case...\n")  # noqa: G004
             os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
             with open(report_path, "w", newline="", encoding="utf-8") as f:
                 f.write("Case_ID,Resolution,Frames,VAE_Lighting_Target,Encode_Time(ms),Decode_Time(ms)\n")
@@ -294,11 +309,11 @@ class InferenceManager(object):
             test_args.vae_lightning = target
 
             if rank == 0:
-                logger.info(f"--- 速度测试组合: {w}x{h}, {f}帧, {target} ---")
+                logger.info(f"--- 速度测试组合: {w}x{h}, {f}帧, {target} ---")  # noqa: G004
             self.infer_batch(test_args)
 
         if rank == 0:
-            logger.info(f">>> [速度验证] 测试完成，报告已保存至 {report_path}")
+            logger.info(f">>> [速度验证] 测试完成，报告已保存至 {report_path}")  # noqa: G004
 
     def _run_accuracy_test(self, args, sampled_dirs, rank):
         """执行精度测试逻辑"""
@@ -306,7 +321,7 @@ class InferenceManager(object):
         task_desc_path = os.path.join(args.batch_test_report_dir, "任务描述.txt")
 
         if rank == 0:
-            logger.info(f">>> 启动 [精度验证] 测试，共 {len(sampled_dirs)} 个 case...")
+            logger.info(f">>> 启动 [精度验证] 测试，共 {len(sampled_dirs)} 个 case...")  # noqa: G004
             os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
             with open(task_desc_path, "w", encoding="utf-8") as f:
                 f.write("任务背景：VAE并行加速精度测试\n\n原始目录：original\n\n对比目录：target\n")
@@ -315,7 +330,7 @@ class InferenceManager(object):
                 for case_dir in sampled_dirs:
                     case_id = os.path.basename(case_dir)
                     prompt_file = os.path.join(case_dir, "prompt.txt")
-                    prompt_text = read_text(prompt_file).strip().replace('\n', '')
+                    prompt_text = read_text(prompt_file).strip().replace("\n", "")
                     f.write(f"{case_id}.mp4,{prompt_text}\n")
 
         resolutions, frames, targets = self.parse_test_matrix(args, "accuracy")
@@ -330,17 +345,20 @@ class InferenceManager(object):
             test_args.vae_lightning = target
 
             if rank == 0:
-                logger.info(f"--- 精度测试组合: {w}x{h}, {f}帧, VAE加速对象：{target} ---")
+                logger.info(f"--- 精度测试组合: {w}x{h}, {f}帧, VAE加速对象：{target} ---")  # noqa: G004
             self.infer_batch(test_args)
 
         if rank == 0:
-            logger.info(f">>> [精度验证] 测试完成，报告已保存至 {report_path}")
+            logger.info(f">>> [精度验证] 测试完成，报告已保存至 {report_path}")  # noqa: G004
 
     def _get_output_dir(self, case_args, case_dir: str, report_dir: str) -> str:
         """抽离：根据不同测试模式动态计算输出目录"""
         if case_args.batch_test_mode == "speed":
-            return os.path.join(report_dir, f"{case_args.width}x{case_args.height}_{case_args.frames}f",
-                                f"lighting-{case_args.vae_lightning}")
+            return os.path.join(
+                report_dir,
+                f"{case_args.width}x{case_args.height}_{case_args.frames}f",
+                f"lighting-{case_args.vae_lightning}",
+            )
 
         if case_args.batch_test_mode == "accuracy":
             sub_folder = "original" if case_args.vae_lightning == "none" else "target"
@@ -348,10 +366,11 @@ class InferenceManager(object):
 
         # 常规模式
         output_dir = os.path.join(case_dir, case_args.task_type)
-        is_lightning_mode = (
-                case_args.vae_lightning in ["encoder", "decoder", "encoder_and_decoder"]
-                and case_args.vae_pad_mode in ["tail_only", "all_sides", "all_sides_valid"]
-        )
+        is_lightning_mode = case_args.vae_lightning in [
+            "encoder",
+            "decoder",
+            "encoder_and_decoder",
+        ] and case_args.vae_pad_mode in ["tail_only", "all_sides", "all_sides_valid"]
 
         if not is_lightning_mode:
             return output_dir
@@ -374,30 +393,36 @@ class InferenceManager(object):
         speed_report = os.path.join(getattr(args, "batch_test_report_dir", "./"), "report_speed.csv")
         with open(speed_report, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow([
-                case_id, f"{args.width}x{args.height}", args.frames,
-                args.vae_lightning, infer_info.vae_last_encode_time, infer_info.vae_last_decode_time
-            ])
+            writer.writerow(
+                [
+                    case_id,
+                    f"{args.width}x{args.height}",
+                    args.frames,
+                    args.vae_lightning,
+                    infer_info.vae_last_encode_time,
+                    infer_info.vae_last_decode_time,
+                ]
+            )
 
     def infer_batch_from_testdata(
-            self,
-            args,
-            image_name: str = "image.jpg",
-            prompt_name: str = "prompt.txt",
-            out_video_name: str = "output.mp4",
+        self,
+        args,
+        image_name: str = "image.jpg",
+        prompt_name: str = "prompt.txt",
+        out_video_name: str = "output.mp4",
     ):
         rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
 
         case_dirs = getattr(args, "sampled_case_dirs", None) or list_cases(args.batch_test_input_dir)
         if rank == 0:
-            logger.info(f"[BATCH] Processing {len(case_dirs)} cases...")
+            logger.info(f"[BATCH] Processing {len(case_dirs)} cases...")  # noqa: G004
 
         failed = []
 
         for idx, case_dir in enumerate(case_dirs):
             case_id = os.path.basename(case_dir)
             if rank == 0:
-                logger.info(f"[BATCH] ({idx + 1}/{len(case_dirs)}) case={case_id} dir={case_dir}")
+                logger.info(f"[BATCH] ({idx + 1}/{len(case_dirs)}) case={case_id} dir={case_dir}")  # noqa: G004
 
             if torch.distributed.is_initialized():
                 torch.distributed.barrier()
@@ -432,14 +457,14 @@ class InferenceManager(object):
                 if rank == 0:
                     # 2. 调用抽离的写报告逻辑
                     self._append_speed_report(case_args, case_id)
-                    logger.info(f"[BATCH] case={case_id} OK -> {case_args.save_path}")
+                    logger.info(f"[BATCH] case={case_id} OK -> {case_args.save_path}")  # noqa: G004
             except Exception as e:
-                logger.error(f"[BATCH] case={case_id} Failed: {e}")
+                logger.error(f"[BATCH] case={case_id} Failed: {e}")  # noqa: G004
                 failed.append({"case_id": case_id, "error": str(e)})
 
             torch.cuda.synchronize()
             if rank == 0:
-                logger.info(f"time cost:{time.time() - start_time}")
+                logger.info(f"time cost:{time.time() - start_time}")  # noqa: G004
 
         return failed
 
@@ -452,7 +477,7 @@ class InferenceManager(object):
             "num_frames": args.frames,
             "num_inference_steps": args.num_inference_steps,
             "guidance_scale": args.guidance_scale,
-            "generator": torch.Generator().manual_seed(args.seed)
+            "generator": torch.Generator().manual_seed(args.seed),
         }
         if "Wan2.2" in args.model:
             infer_params["guidance_scale_2"] = args.guidance_scale_2
@@ -486,7 +511,8 @@ class InferenceManager(object):
             latent_width = infer_params["width"] // 8
             attention_manager.set_rainfusion_attention(
                 [num_latent_frames, latent_height, latent_width],
-                skip_timesteps=int(args.rainfusion_ratio * args.num_inference_steps))
+                skip_timesteps=int(args.rainfusion_ratio * args.num_inference_steps),
+            )
         if args.atten_ada_sparse:
             attention_manager.set_ada_bsa_sparse_flash_attention(args.ada_sparsity)
 
@@ -544,9 +570,9 @@ class InferenceManager(object):
             input1 = output[:mod]
             output = output[mod:]
         if rank != (size - 1):
-            input = output[step * rank: step * (rank + 1) + 1]
+            input = output[step * rank : step * (rank + 1) + 1]
         else:
-            input = torch.cat([output[step * rank: step * (rank + 1)], output[-1:]], dim=0)
+            input = torch.cat([output[step * rank : step * (rank + 1)], output[-1:]], dim=0)
 
         interpolation_model = IRFNet_S()
         interpolation_model.load_state_dict(torch.load(args.frame_model_path, weights_only=True))
@@ -560,12 +586,19 @@ class InferenceManager(object):
             multiplier = args.save_fps // 16 + 1
             is_skip = False
 
-        out = vfi(input, rank, interpolation_model, 1, multiplier=multiplier, is_skip=is_skip)[:-1].permute(
-            0, 2, 3, 1).contiguous()
+        out = (
+            vfi(input, rank, interpolation_model, 1, multiplier=multiplier, is_skip=is_skip)[:-1]
+            .permute(0, 2, 3, 1)
+            .contiguous()
+        )
         out1 = torch.zeros_like(out)[:0].to(rank).contiguous()
         if rank == 0 and mod != 0 and input1.shape[0] >= 2:
-            out1 = vfi(input1, rank, interpolation_model, 1, multiplier=multiplier,
-                       is_skip=is_skip).permute(0, 2, 3, 1).contiguous().cpu()
+            out1 = (
+                vfi(input1, rank, interpolation_model, 1, multiplier=multiplier, is_skip=is_skip)
+                .permute(0, 2, 3, 1)
+                .contiguous()
+                .cpu()
+            )
         elif rank == 0 and mod != 0:
             out1 = input1.permute(0, 2, 3, 1).contiguous().cpu()
         out2 = [torch.empty_like(out) for _ in range(size)]
@@ -590,7 +623,7 @@ class InferenceManager(object):
                 self.init_args.lora_path_list if self.init_args is not None else None,
                 args.lora_path_list,
                 fuse_lora=args.fuse_lora,
-                weights_list=args.lora_scale_weight_list
+                weights_list=args.lora_scale_weight_list,
             )
             update_pipe(self.pipe, args)
             if args.adopt_sr:
@@ -609,7 +642,7 @@ class InferenceManager(object):
                 self.init_args.lora_path_list if self.init_args is not None else None,
                 args.lora_path_list,
                 fuse_lora=args.fuse_lora,
-                weights_list=args.lora_scale_weight_list
+                weights_list=args.lora_scale_weight_list,
             )
 
         if not consistent:
@@ -634,14 +667,10 @@ class InferenceManager(object):
                     f"must equal --sp ({args.sp})"
                 )
             if args.sp == 16 and args.ulysses_degree == 16:
-                raise ValueError(
-                    "--ulysses_degree cannot be set to 16 when --sp is 16"
-                )
+                raise ValueError("--ulysses_degree cannot be set to 16 when --sp is 16")
         else:
             if args.ulysses_degree is not None or args.ring_degree is not None:
-                raise ValueError(
-                    "--ulysses_degree and --ring_degree must be specified together"
-                )
+                raise ValueError("--ulysses_degree and --ring_degree must be specified together")
 
         self._prepare_pipeline(args)
 
@@ -650,14 +679,16 @@ class InferenceManager(object):
 
         try:
             os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
-        except OSError as e:
-            logger.error(f"Failed to create output directory: {args.save_path}")
+        except OSError:
+            logger.error(f"Failed to create output directory: {args.save_path}")  # noqa: G004
             return 0.0
 
         if args.guidance_scale is None or ("Wan2.2" in args.model and args.guidance_scale_2 is None):
             args.guidance_scale, args.guidance_scale_2 = GUIDANCE_SCALE_MAP[args.model]
-            logger.info(f"The guidance scale was not set correctly and has been reset to "
-                        f"guidance scale={args.guidance_scale}, guidance scale 2={args.guidance_scale_2}.")
+            logger.info(
+                f"The guidance scale was not set correctly and has been reset to "  # noqa: G004
+                f"guidance scale={args.guidance_scale}, guidance scale 2={args.guidance_scale_2}."
+            )
 
         if args.x:
             args.guidance_scale = X_GUIDANCE_SCALE
@@ -673,12 +704,12 @@ class InferenceManager(object):
         torch.cuda.synchronize()
         end_time = time.time()
         infer_cost = end_time - start_time
-        logger.info(f"time cost:{infer_cost}")
+        logger.info(f"time cost:{infer_cost}")  # noqa: G004
 
         return infer_cost
 
 
-class ImageInferenceManager(object):
+class ImageInferenceManager:
     def __init__(self):
         self.pipe = None
 
@@ -701,7 +732,7 @@ class ImageInferenceManager(object):
         )
 
         if args.guidance_scale is not None:
-            infer_params['guidance_scale'] = args.guidance_scale
+            infer_params["guidance_scale"] = args.guidance_scale
 
         # for image to image
         if args.image_path is not None and args.image_path != "":
@@ -716,11 +747,7 @@ class ImageInferenceManager(object):
     def infer(self, args) -> float:
         self.pipe = load_pipe(args)
 
-        update_scheduler(
-            self.pipe,
-            args.model,
-            args.lora_path_list
-        )
+        update_scheduler(self.pipe, args.model, args.lora_path_list)
 
         update_lora(
             self.pipe,
@@ -728,7 +755,7 @@ class ImageInferenceManager(object):
             init_lora_path_list=None,
             lora_path_list=args.lora_path_list,
             fuse_lora=args.fuse_lora,
-            weights_list=args.lora_scale_weight_list
+            weights_list=args.lora_scale_weight_list,
         )
 
         update_pipe(self.pipe, args)
@@ -737,8 +764,8 @@ class ImageInferenceManager(object):
 
         try:
             os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
-        except OSError as e:
-            logger.error(f"Failed to create output directory: {args.save_path}")
+        except OSError:
+            logger.error(f"Failed to create output directory: {args.save_path}")  # noqa: G004
             return 0.0
 
         infer_params = self.set_infer_params(args)
@@ -755,7 +782,7 @@ class ImageInferenceManager(object):
         torch.npu.synchronize()
         end_time = time.time()
         infer_cost = end_time - start_time
-        logger.info(f"time cost:{infer_cost}")
+        logger.info(f"time cost:{infer_cost}")  # noqa: G004
 
         images = out["images"] if isinstance(out, dict) else getattr(out, "images", out)
         image = images[0]
@@ -763,10 +790,10 @@ class ImageInferenceManager(object):
         if torch.distributed.is_initialized():
             if torch.distributed.get_rank() == 0:
                 image.save(args.save_path)
-                logger.info(f"save image in {args.save_path}")
+                logger.info(f"save image in {args.save_path}")  # noqa: G004
         else:
             image.save(args.save_path)
-            logger.info(f"save image in {args.save_path}")
+            logger.info(f"save image in {args.save_path}")  # noqa: G004
 
         return infer_cost
 
@@ -798,11 +825,7 @@ def _get_temp_save_path(original_path: str) -> str:
     return os.path.join(directory, f"{TEMP_FILE_PREFIX}{filename}")
 
 
-def save_output_server(
-        output,
-        original_save_path: str,
-        args
-) -> None:
+def save_output_server(output, original_save_path: str, args) -> None:
     """
     保存推理输出结果，处理不同场景下的视频保存/帧率调整逻辑
 
@@ -835,8 +858,7 @@ def save_output_server(
             # 计算目标帧率（向上取整）
             save_fps = math.ceil((args.save_fps * 14) / 16)
             # 导出视频
-            export_to_video(output, original_save_path, quality=8, fps=save_fps
-                            )
+            export_to_video(output, original_save_path, quality=8, fps=save_fps)
             # 调整最终帧率
             temp_save_path = _get_temp_save_path(original_save_path)
             InferenceManager().change_fps_filter(original_save_path, temp_save_path, out_fps=args.save_fps)
@@ -913,8 +935,10 @@ def infer_server(args, pipe, sr_pipe, v2v_pipe=None):
     infer_info.update_info(args)
     if args.guidance_scale is None or ("Wan2.2" in args.model and args.guidance_scale_2 is None):
         args.guidance_scale, args.guidance_scale_2 = GUIDANCE_SCALE_MAP[args.model]
-        logger.info(f"The guidance scale was not set correctly and has been reset to "
-                    f"guidance scale={args.guidance_scale}, guidance scale 2={args.guidance_scale_2}.")
+        logger.info(
+            f"The guidance scale was not set correctly and has been reset to "  # noqa: G004
+            f"guidance scale={args.guidance_scale}, guidance scale 2={args.guidance_scale_2}."
+        )
     logger.info("start infer_server")
     torch.distributed.barrier()
     torch.cuda.synchronize()
@@ -973,6 +997,6 @@ def infer_server(args, pipe, sr_pipe, v2v_pipe=None):
     torch.cuda.synchronize()
     end_time = time.time()
     infer_cost = end_time - start_time
-    logger.info(f"time cost:{infer_cost}")
+    logger.info(f"time cost:{infer_cost}")  # noqa: G004
 
     return infer_cost

@@ -65,7 +65,7 @@ class InferInfo:
         return self.tile_world_size_map.get(world_size, world_size)
 
     def __str__(self):
-        return f"Infer Video Info,model={self.model},task_type:{self.task_type},width={self.width},height={self.height},frames={self.frames},fps={self.fps},save_path={self.save_path}"
+        return f"Infer Video Info,model={self.model},task_type:{self.task_type},width={self.width},height={self.height},frames={self.frames},fps={self.fps},save_path={self.save_path}"  # noqa: E501
 
 
 infer_info = InferInfo()

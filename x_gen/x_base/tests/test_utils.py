@@ -6,22 +6,21 @@ Tests various utility functions including:
 - CacheContext: caching context management
 - Other helper functions
 """
-import pytest
+
+from unittest.mock import MagicMock
+
 import numpy as np
-from unittest.mock import MagicMock, patch
-import sys
+import pytest
 import torch
-from x_base.turbo.utils import are_two_tensors_similar
-from x_base.turbo.utils import create_cache_context
-from x_base.turbo.utils import pre_forwar
-from x_base.turbo.utils import batch_func
-from x_base.turbo.utils import CacheContext
-from x_base.turbo.utils import nearest_interp
 from x_base.turbo.utils import (
-            cache_context,
-            create_cache_context,
-            get_current_cache_context,
-        )
+    CacheContext,
+    are_two_tensors_similar,
+    batch_func,
+    cache_context,
+    create_cache_context,
+    get_current_cache_context,
+    nearest_interp,
+)
 
 # ============================================================
 # Pytest markers for dependency management
@@ -31,6 +30,7 @@ from x_base.turbo.utils import (
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -46,10 +46,10 @@ NEAREST_INTERP_CASES = [
 ]
 
 TENSOR_SIMILARITY_CASES = [
-    (0.0, 0.1, True),    # Identical
-    (0.05, 0.1, True),   # 5% diff, 10% threshold -> similar
+    (0.0, 0.1, True),  # Identical
+    (0.05, 0.1, True),  # 5% diff, 10% threshold -> similar
     (0.15, 0.1, False),  # 15% diff, 10% threshold -> not similar
-    (0.01, 0.001, False), # 1% diff, 0.1% threshold -> not similar
+    (0.01, 0.001, False),  # 1% diff, 0.1% threshold -> not similar
 ]
 
 
@@ -78,9 +78,7 @@ class TestNearestInterp:
         np.testing.assert_array_almost_equal(result, src)
 
     @pytest.mark.parametrize("src_data,target_len,expected_first,expected_last", NEAREST_INTERP_CASES)
-    def test_nearest_interp_preserves_endpoints(
-        self, src_data, target_len, expected_first, expected_last
-    ):
+    def test_nearest_interp_preserves_endpoints(self, src_data, target_len, expected_first, expected_last):
         """Test that interpolation preserves first and last values."""
         src = np.array(src_data)
         result = nearest_interp(src, target_len)
@@ -191,14 +189,15 @@ class TestCacheContext:
         assert name2 == "default_1"
         assert name3 == "custom_0"
 
-    @pytest.mark.parametrize("prefix,expected_start", [
-        (None, "default_"),
-        ("custom", "custom_"),
-        ("buffer", "buffer_"),
-    ])
-    def test_cache_context_incremental_name_various_prefixes(
-        self, prefix, expected_start
-    ):
+    @pytest.mark.parametrize(
+        "prefix,expected_start",
+        [
+            (None, "default_"),
+            ("custom", "custom_"),
+            ("buffer", "buffer_"),
+        ],
+    )
+    def test_cache_context_incremental_name_various_prefixes(self, prefix, expected_start):
         """Test incremental name generation with various prefixes."""
         ctx = CacheContext()
         name = ctx.get_incremental_name(prefix)
@@ -276,6 +275,7 @@ class TestBatchFunc:
     @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")
     def test_batch_func_with_2d_tensors(self):
         """Test batch_func with tensors of shape [2, ...]."""
+
         def double(x):
             return x * 2
 
@@ -291,6 +291,7 @@ class TestBatchFunc:
 
     def test_batch_func_with_non_tensors(self):
         """Test batch_func with non-tensor arguments."""
+
         def transform(x):
             return x * 10
 
@@ -301,14 +302,18 @@ class TestBatchFunc:
 
     @pytest.mark.requires_torch
     @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")
-    @pytest.mark.parametrize("batch_size,should_process", [
-        (2, True),   # batch size 2 should be processed
-        (1, False),  # batch size 1 should pass through
-        (3, False),  # batch size 3 should pass through
-        (4, False),  # batch size 4 should pass through
-    ])
+    @pytest.mark.parametrize(
+        "batch_size,should_process",
+        [
+            (2, True),  # batch size 2 should be processed
+            (1, False),  # batch size 1 should pass through
+            (3, False),  # batch size 3 should pass through
+            (4, False),  # batch size 4 should pass through
+        ],
+    )
     def test_batch_func_batch_size_handling(self, batch_size, should_process):
         """Test batch_func only processes tensors with batch_size=2."""
+
         def transform(x):
             return x * 10
 
@@ -327,16 +332,19 @@ class TestPreForward:
     def test_pre_forward_no_attention_kwargs(self):
         """Test pre_forward without attention_kwargs."""
         mock_self = MagicMock()
-        result = pre_forward(mock_self, None)
+        result = pre_forward(mock_self, None)  # noqa: F821
 
         assert result == 1.0  # Default lora_scale
 
-    @pytest.mark.parametrize("scale_value,expected", [
-        (0.5, 0.5),
-        (1.0, 1.0),
-        (2.0, 2.0),
-        (None, 1.0),  # None should default to 1.0
-    ])
+    @pytest.mark.parametrize(
+        "scale_value,expected",
+        [
+            (0.5, 0.5),
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (None, 1.0),  # None should default to 1.0
+        ],
+    )
     def test_pre_forward_with_various_scales(self, scale_value, expected):
         """Test pre_forward with various scale values."""
         mock_self = MagicMock()
@@ -346,7 +354,7 @@ class TestPreForward:
         else:
             attention_kwargs = {"scale": scale_value}
 
-        result = pre_forward(mock_self, attention_kwargs)
+        result = pre_forward(mock_self, attention_kwargs)  # noqa: F821
 
         assert result == expected
 
@@ -355,7 +363,7 @@ class TestPreForward:
         mock_self = MagicMock()
         attention_kwargs = {}
 
-        result = pre_forward(mock_self, attention_kwargs)
+        result = pre_forward(mock_self, attention_kwargs)  # noqa: F821
 
         assert result == 1.0
 
@@ -376,8 +384,8 @@ class TestCacheContextManager:
         ctx = create_cache_context()
 
         assert ctx is not None
-        assert hasattr(ctx, 'buffers')
-        assert hasattr(ctx, 'incremental_name_counters')
+        assert hasattr(ctx, "buffers")
+        assert hasattr(ctx, "incremental_name_counters")
 
     def test_cache_context_manager_nested(self):
         """Test nested cache context managers."""
@@ -421,17 +429,16 @@ class TestTensorSimilarity:
     @pytest.mark.requires_torch
     @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")
     @pytest.mark.parametrize("diff_percent,threshold,expected_similar", TENSOR_SIMILARITY_CASES)
-    def test_are_two_tensors_similar_various_cases(
-        self, diff_percent, threshold, expected_similar
-    ):
+    def test_are_two_tensors_similar_various_cases(self, diff_percent, threshold, expected_similar):
         """Test similarity check with various difference/threshold combinations."""
         t1 = torch.ones(100, 100)
         t2 = torch.ones(100, 100) * (1.0 + diff_percent)
 
         result = are_two_tensors_similar(t1, t2, threshold=threshold)
 
-        assert result == expected_similar, \
-            f"diff={diff_percent}, threshold={threshold}: expected {expected_similar}, got {result}"
+        assert (
+            result == expected_similar
+        ), f"diff={diff_percent}, threshold={threshold}: expected {expected_similar}, got {result}"
 
     @pytest.mark.requires_torch
     @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")

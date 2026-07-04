@@ -10,10 +10,10 @@ Note: These tests verify standalone logic without importing the actual module.
 No sys.modules mocking is needed as we test mathematical operations and shapes.
 """
 
-import pytest
-import torch
 import math
 from unittest.mock import MagicMock
+
+import torch
 
 
 class TestHunyuanVideoAttnProcessor2_0:
@@ -22,7 +22,7 @@ class TestHunyuanVideoAttnProcessor2_0:
     def test_init(self):
         """Test initialization."""
         has_sdpa = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-        assert has_sdpa == True
+        assert has_sdpa == True  # noqa: E712
 
 
 class TestApplyNorms:
@@ -31,7 +31,7 @@ class TestApplyNorms:
     def test_apply_norm_q(self):
         """Test applying norm to query."""
         query = torch.randn(1, 24, 100, 64)
-        key = torch.randn(1, 24, 100, 64)
+        key = torch.randn(1, 24, 100, 64)  # noqa: F841
 
         # Simulate Q norm
         norm_q = torch.nn.LayerNorm(64)
@@ -41,7 +41,7 @@ class TestApplyNorms:
 
     def test_apply_norm_k(self):
         """Test applying norm to key."""
-        query = torch.randn(1, 24, 100, 64)
+        query = torch.randn(1, 24, 100, 64)  # noqa: F841
         key = torch.randn(1, 24, 100, 64)
 
         norm_k = torch.nn.LayerNorm(64)
@@ -63,8 +63,8 @@ class TestApplyEncProjAndNorm:
 
         # Simulate projections
         encoder_query = encoder_hidden_states  # add_q_proj
-        encoder_key = encoder_hidden_states    # add_k_proj
-        encoder_value = encoder_hidden_states  # add_v_proj
+        encoder_key = encoder_hidden_states  # add_k_proj  # noqa: F841
+        encoder_value = encoder_hidden_states  # add_v_proj  # noqa: F841
 
         assert encoder_query.shape == (batch_size, encoder_seq_len, hidden_dim)
 
@@ -106,8 +106,8 @@ class TestAttentionCall:
         hidden_states = torch.randn(batch_size, seq_len, hidden_dim)
 
         query = hidden_states  # to_q
-        key = hidden_states    # to_k
-        value = hidden_states  # to_v
+        key = hidden_states  # to_k  # noqa: F841
+        value = hidden_states  # to_v  # noqa: F841
 
         assert query.shape == (batch_size, seq_len, hidden_dim)
 
@@ -131,14 +131,14 @@ class TestNPUFusionAttention:
         """Test NPU fusion attention parameters."""
         B, N, S, D = 1, 24, 100, 64
 
-        query = torch.randn(B, N, S, D)
-        key = torch.randn(B, N, S, D)
-        value = torch.randn(B, N, S, D)
+        query = torch.randn(B, N, S, D)  # noqa: F841
+        key = torch.randn(B, N, S, D)  # noqa: F841
+        value = torch.randn(B, N, S, D)  # noqa: F841
 
         # Parameters for npu_fusion_attention
         head_num = N
         input_layout = "BNSD"
-        keep_prob = 1.0
+        keep_prob = 1.0  # noqa: F841
         scale = 1 / math.sqrt(D)
 
         assert head_num == 24
@@ -182,8 +182,8 @@ class TestHunyuanVideoConfig:
         patch_size = 2
         num_attention_heads = 24
         attention_head_dim = 64
-        in_channels = 16
-        out_channels = 16
+        in_channels = 16  # noqa: F841
+        out_channels = 16  # noqa: F841
         ffn_dim = 3072
 
         assert patch_size == 2
@@ -226,7 +226,7 @@ class TestParallelManagerIntegration:
 
     def test_parallel_disabled(self):
         """Test parallel manager disabled."""
-        sp_size = 1
+        sp_size = 1  # noqa: F841
         heads = 24
 
         # No division needed
@@ -243,7 +243,7 @@ class TestEncoderProjModes:
         encoder_hidden_states = torch.randn(1, 256, 1536)
 
         use_encoder_proj = add_q_proj is None and encoder_hidden_states is not None
-        assert use_encoder_proj == False  # Mode 1 uses add_q_proj
+        assert use_encoder_proj == False  # Mode 1 uses add_q_proj  # noqa: E712
 
     def test_use_encoder_proj_mode_2(self):
         """Test mode 2: add_q_proj is None."""
@@ -251,4 +251,4 @@ class TestEncoderProjModes:
         encoder_hidden_states = torch.randn(1, 256, 1536)
 
         use_encoder_proj = add_q_proj is None and encoder_hidden_states is not None
-        assert use_encoder_proj == True  # Mode 2 uses to_q for encoder
+        assert use_encoder_proj == True  # Mode 2 uses to_q for encoder  # noqa: E712

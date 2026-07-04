@@ -1,24 +1,27 @@
 """
 Integration tests for x_diffusers.framework.pipeline modules with NPU mocking.
 """
+
+import sys
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
 import torch
-import sys
-from unittest.mock import MagicMock, patch, Mock
 
-from tests.conftest import (
-    MockNPUModule, MockAttentionManager, MockRopeManager, MockParallelManager
-)
+from tests.conftest import MockAttentionManager, MockNPUModule, MockParallelManager, MockRopeManager
 
 
 def mock_gather_sequence(tensor, dim=2, group=None):
     return tensor
 
+
 def mock_split_sequence(tensor, dim=2, group=None):
     return tensor
 
+
 def mock_all_to_all_before_attn(tensor, group, scatter_dim=2, gather_dim=1):
     return tensor
+
 
 def mock_all_to_all_after_attn(tensor, group, scatter_dim=1, gather_dim=2):
     return tensor
@@ -30,7 +33,7 @@ class TestWanJointPipelineWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
@@ -45,10 +48,10 @@ class TestWanJointPipelineWithMock:
         mock_x_base.get_pad = Mock(return_value=0)
         mock_x_base.set_pad = Mock()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
-        self.torch_npu_patcher = patch.object(torch, 'npu', MockNPUModule())
+        self.torch_npu_patcher = patch.object(torch, "npu", MockNPUModule())
         self.torch_npu_patcher.start()
 
         yield
@@ -82,12 +85,7 @@ class TestWanJointPipelineWithMock:
 
     def test_optional_components_extended(self):
         """Test optional components are extended."""
-        optional_components = [
-            "feature_extractor",
-            "image_encoder",
-            "transformer_2",
-            "transformer_3"
-        ]
+        optional_components = ["feature_extractor", "image_encoder", "transformer_2", "transformer_3"]
 
         assert "transformer_2" in optional_components
         assert "transformer_3" in optional_components
@@ -182,7 +180,7 @@ class TestSwitchModelWithMock:
         boundary_ts = 20
 
         use_small_model = t >= boundary_ts
-        assert use_small_model == True
+        assert use_small_model == True  # noqa: E712
 
     def test_switch_model_low_noise(self):
         """Test switch_model in low noise regime."""
@@ -190,7 +188,7 @@ class TestSwitchModelWithMock:
         boundary_ts = 20
 
         use_small_model = t >= boundary_ts
-        assert use_small_model == False
+        assert use_small_model == False  # noqa: E712
 
     def test_switch_model_small_boundary(self):
         """Test switch_model with small boundary."""
@@ -198,14 +196,14 @@ class TestSwitchModelWithMock:
         boundary_ts = 0
 
         use_small_model = t >= boundary_ts
-        assert use_small_model == True
+        assert use_small_model == True  # noqa: E712
 
     def test_switch_model_skip(self):
         """Test switch_model can be skipped."""
         enable_switch = False
 
         # When disabled, always use main model
-        assert enable_switch == False
+        assert enable_switch == False  # noqa: E712
 
 
 class TestCalcLatentInputWithMock:
@@ -292,14 +290,14 @@ class TestClassifierFreeGuidanceWithMock:
         guidance_scale = 5.0
         do_cfg = guidance_scale > 1.0
 
-        assert do_cfg == True
+        assert do_cfg == True  # noqa: E712
 
     def test_cfg_disabled(self):
         """Test CFG when disabled."""
         guidance_scale = 1.0
         do_cfg = guidance_scale > 1.0
 
-        assert do_cfg == False
+        assert do_cfg == False  # noqa: E712
 
 
 class TestTenSecondPipelineWithMock:
@@ -308,7 +306,7 @@ class TestTenSecondPipelineWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
@@ -316,7 +314,7 @@ class TestTenSecondPipelineWithMock:
         mock_x_base.attention_manager = MockAttentionManager()
         mock_x_base.rope_manager = MockRopeManager()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
@@ -414,11 +412,7 @@ class TestTenSecondPipelineWithMock:
 
     def test_model_cpu_offload_seq(self):
         """Test model_cpu_offload_seq."""
-        model_cpu_offload_seq = [
-            "text_encoder",
-            "transformer",
-            "vae"
-        ]
+        model_cpu_offload_seq = ["text_encoder", "transformer", "vae"]
 
         assert "transformer" in model_cpu_offload_seq
 
@@ -457,14 +451,14 @@ class TestTenSecondPipelineWithMock:
         guidance_scale = 5.0
         do_cfg = guidance_scale > 1.0
 
-        assert do_cfg == True
+        assert do_cfg == True  # noqa: E712
 
     def test_do_classifier_free_guidance_false(self):
         """Test do_classifier_free_guidance False."""
         guidance_scale = 1.0
         do_cfg = guidance_scale > 1.0
 
-        assert do_cfg == False
+        assert do_cfg == False  # noqa: E712
 
     def test_num_timesteps_property(self):
         """Test num_timesteps property."""
@@ -482,7 +476,7 @@ class TestTenSecondPipelineWithMock:
         """Test interrupt property."""
         interrupt = False
 
-        assert interrupt == False
+        assert interrupt == False  # noqa: E712
 
     def test_latent_shape_calculation(self):
         """Test latent shape calculation."""
@@ -494,7 +488,7 @@ class TestTenSecondPipelineWithMock:
 
         latent_h = height // vae_scale_spatial
         latent_w = width // vae_scale_spatial
-        latent_t = (frames - 1) // vae_scale_temporal + 1
+        latent_t = (frames - 1) // vae_scale_temporal + 1  # noqa: F841
 
         assert latent_h == 60
         assert latent_w == 90
@@ -515,7 +509,7 @@ class TestTenSecondPipelineWithMock:
         boundary = 20
 
         is_high_noise = t >= boundary
-        assert is_high_noise == True
+        assert is_high_noise == True  # noqa: E712
 
     def test_low_noise_stage(self):
         """Test low noise stage boundary."""
@@ -523,7 +517,7 @@ class TestTenSecondPipelineWithMock:
         boundary = 20
 
         is_high_noise = t >= boundary
-        assert is_high_noise == False
+        assert is_high_noise == False  # noqa: E712
 
     def test_conditioning_indices_processing(self):
         """Test conditioning indices processing."""
@@ -545,7 +539,7 @@ class TestTenSecondPipelineWithMock:
 
     def test_encode_prompt_single_string(self):
         """Test encode_prompt with single string."""
-        prompt = "A cat and a dog"
+        prompt = "A cat and a dog"  # noqa: F841
 
         batch_size = 1
         assert batch_size == 1
@@ -583,10 +577,10 @@ class TestTenSecondPipelineWithMock:
         """Test return_dict True."""
         return_dict = True
 
-        assert return_dict == True
+        assert return_dict == True  # noqa: E712
 
     def test_return_dict_false(self):
         """Test return_dict False."""
         return_dict = False
 
-        assert return_dict == False
+        assert return_dict == False  # noqa: E712

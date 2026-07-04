@@ -1,11 +1,11 @@
 import os
-from setuptools import setup, find_packages
-from wheel.bdist_wheel import bdist_wheel
 
-with open(os.path.join(os.path.dirname(__file__), 'requirements.txt'), 'r') as f:
+from setuptools import find_packages, setup
+
+with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
     install_requires = []
     for line in f.read().splitlines():
-        if line.strip() and not line.startswith('#'):
+        if line.strip() and not line.startswith("#"):
             install_requires.append(line)
 
 setup(
@@ -14,7 +14,7 @@ setup(
     description="x diffusers",
     packages=find_packages(),
     install_requires=install_requires,
-    python_requires='>=3.9',
+    python_requires=">=3.9",
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",

@@ -1,17 +1,17 @@
-import torch
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from diffusers.utils import logging
+import torch
 from diffusers.pipelines import QwenImagePipeline
-from diffusers.pipelines.qwenimage.pipeline_qwenimage import calculate_shift, retrieve_timesteps
 from diffusers.pipelines.qwenimage.pipeline_output import QwenImagePipelineOutput
+from diffusers.pipelines.qwenimage.pipeline_qwenimage import calculate_shift, retrieve_timesteps
+from diffusers.utils import logging
 
 from ..registry import register_hf_pipeline_class
 from .utils import (
     PIPELINE_CONFIGS,
     run_qwenimage_pipeline_core,
 )
-
 
 logger = logging.get_logger(__name__)
 

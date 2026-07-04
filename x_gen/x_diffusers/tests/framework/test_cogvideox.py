@@ -10,9 +10,7 @@ Note: These tests verify standalone logic without importing the actual module.
 No sys.modules mocking is needed as we test mathematical operations and shapes.
 """
 
-import pytest
 import torch
-import math
 
 
 class TestAscendCogVideoXAttnProcessor2_0:
@@ -22,7 +20,7 @@ class TestAscendCogVideoXAttnProcessor2_0:
         """Test initialization."""
         # The processor checks for PyTorch 2.0+
         has_sdpa = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-        assert has_sdpa == True  # PyTorch 2.0+ should have this
+        assert has_sdpa == True  # PyTorch 2.0+ should have this  # noqa: E712
 
 
 class TestApplyRotaryEmb:
@@ -36,7 +34,7 @@ class TestApplyRotaryEmb:
         # Create cos and sin
         cos = torch.randn(seq_len, head_dim)
         sin = torch.randn(seq_len, head_dim)
-        freqs_cis = (cos, sin)
+        freqs_cis = (cos, sin)  # noqa: F841
 
         # Real mode processing
         cos = cos[None, None]  # Add batch and head dims
@@ -81,12 +79,12 @@ class TestAttentionCall:
 
         # Simulate projections
         query = hidden_states  # to_q
-        key = hidden_states    # to_k
-        value = hidden_states  # to_v
+        key = hidden_states  # to_k  # noqa: F841
+        value = hidden_states  # to_v  # noqa: F841
 
         encoder_query = encoder_hidden_states
-        encoder_key = encoder_hidden_states
-        encoder_value = encoder_hidden_states
+        encoder_key = encoder_hidden_states  # noqa: F841
+        encoder_value = encoder_hidden_states  # noqa: F841
 
         assert query.shape[1] == latent_seq_len
         assert encoder_query.shape[1] == text_seq_len
@@ -110,9 +108,7 @@ class TestAttentionCall:
 
         hidden_states = torch.randn(batch_size, seq_len, hidden_dim)
 
-        encoder_output, latent_output = hidden_states.split(
-            [text_seq_length, seq_len - text_seq_length], dim=1
-        )
+        encoder_output, latent_output = hidden_states.split([text_seq_length, seq_len - text_seq_length], dim=1)
 
         assert encoder_output.shape == (batch_size, text_seq_length, hidden_dim)
         assert latent_output.shape == (batch_size, seq_len - text_seq_length, hidden_dim)
@@ -150,8 +146,8 @@ class TestCogVideoXBlock:
         """Test default block configuration."""
         dim = 64
         num_attention_heads = 24
-        attention_head_dim = 64
-        ffn_dim = 256
+        attention_head_dim = 64  # noqa: F841
+        ffn_dim = 256  # noqa: F841
 
         assert dim == 64
         assert num_attention_heads == 24
@@ -174,8 +170,8 @@ class TestCogVideoXTransformerConfig:
         patch_size = 2
         num_attention_heads = 24
         attention_head_dim = 64
-        in_channels = 16
-        out_channels = 16
+        in_channels = 16  # noqa: F841
+        out_channels = 16  # noqa: F841
 
         assert patch_size == 2
         assert num_attention_heads == 24
@@ -189,7 +185,7 @@ class TestCogVideoXTransformerConfig:
     def test_qk_norm_default(self):
         """Test QK normalization default."""
         qk_norm = True
-        assert qk_norm == True
+        assert qk_norm == True  # noqa: E712
 
 
 class TestAdaLayerNorm:
@@ -199,7 +195,7 @@ class TestAdaLayerNorm:
         """Test AdaLayerNorm output shape."""
         batch_size, seq_len, dim = 1, 100, 64
 
-        hidden_states = torch.randn(batch_size, seq_len, dim)
+        hidden_states = torch.randn(batch_size, seq_len, dim)  # noqa: F841
         timestep_emb = torch.randn(batch_size, 1, 6 * dim)  # shift, scale for multiple norms
 
         # Simulate scale and shift extraction
@@ -215,7 +211,7 @@ class TestFeedForward:
     def test_ffn_shape(self):
         """Test FFN output shape."""
         batch_size, seq_len, dim = 1, 100, 64
-        inner_dim = 256
+        inner_dim = 256  # noqa: F841
 
         hidden_states = torch.randn(batch_size, seq_len, dim)
 

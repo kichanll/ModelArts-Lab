@@ -1,20 +1,20 @@
-import torch
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from diffusers.utils import logging
-from diffusers.pipelines import QwenImageEditPipeline
-from diffusers.pipelines.qwenimage.pipeline_qwenimage_edit import calculate_shift, retrieve_timesteps
+import torch
 from diffusers.image_processor import PipelineImageInput
+from diffusers.pipelines import QwenImageEditPipeline
 from diffusers.pipelines.qwenimage.pipeline_output import QwenImagePipelineOutput
+from diffusers.pipelines.qwenimage.pipeline_qwenimage_edit import calculate_shift, retrieve_timesteps
+from diffusers.utils import logging
 
 from ..registry import register_hf_pipeline_class
 from .utils import (
     PIPELINE_CONFIGS,
-    run_qwenimage_pipeline_core,
     get_calculated_dimensions,
     prepare_dimensions,
+    run_qwenimage_pipeline_core,
 )
-
 
 logger = logging.get_logger(__name__)
 
@@ -27,8 +27,9 @@ def _get_encode_image(pipeline, image):
     return pipeline.image_processor.resize(image, calculated_height, calculated_width)
 
 
-def _prepare_latents_data(pipeline, image, batch_size, num_images_per_prompt,
-                          height, width, dtype, device, generator, latents):
+def _prepare_latents_data(
+    pipeline, image, batch_size, num_images_per_prompt, height, width, dtype, device, generator, latents
+):
     """Prepare latents and img_shapes for QwenImageEditPipeline."""
     calculated_width, calculated_height = get_calculated_dimensions(pipeline, image)
 
@@ -42,15 +43,28 @@ def _prepare_latents_data(pipeline, image, batch_size, num_images_per_prompt,
     # Prepare latents
     num_channels_latents = pipeline.transformer.config.in_channels // 4
     latents, image_latents = pipeline.prepare_latents(
-        vae_image, batch_size * num_images_per_prompt,
-        num_channels_latents, height, width, dtype, device, generator, latents,
+        vae_image,
+        batch_size * num_images_per_prompt,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        device,
+        generator,
+        latents,
     )
 
     # Prepare img_shapes
-    img_shapes = [[
-        (1, height // pipeline.vae_scale_factor // 2, width // pipeline.vae_scale_factor // 2),
-        (1, calculated_height // pipeline.vae_scale_factor // 2, calculated_width // pipeline.vae_scale_factor // 2),
-    ]] * batch_size
+    img_shapes = [
+        [
+            (1, height // pipeline.vae_scale_factor // 2, width // pipeline.vae_scale_factor // 2),
+            (
+                1,
+                calculated_height // pipeline.vae_scale_factor // 2,
+                calculated_width // pipeline.vae_scale_factor // 2,
+            ),
+        ]
+    ] * batch_size
 
     return latents, img_shapes, {"image_latents": image_latents}
 
@@ -85,20 +99,35 @@ class QwenImageEditPipeline(QwenImageEditPipeline):
         max_sequence_length: int = 512,
     ):
         return run_qwenimage_pipeline_core(
-            self, PIPELINE_CONFIGS["qwenimage_edit"],
-            prompt=prompt, negative_prompt=negative_prompt, true_cfg_scale=true_cfg_scale,
-            height=height, width=width, num_inference_steps=num_inference_steps,
-            cfg_parallel_size=cfg_parallel_size, sigmas=sigmas, guidance_scale=guidance_scale,
-            num_images_per_prompt=num_images_per_prompt, generator=generator, latents=latents,
-            prompt_embeds=prompt_embeds, prompt_embeds_mask=prompt_embeds_mask,
-            negative_prompt_embeds=negative_prompt_embeds, negative_prompt_embeds_mask=negative_prompt_embeds_mask,
-            output_type=output_type, return_dict=return_dict, attention_kwargs=attention_kwargs,
+            self,
+            PIPELINE_CONFIGS["qwenimage_edit"],
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            true_cfg_scale=true_cfg_scale,
+            height=height,
+            width=width,
+            num_inference_steps=num_inference_steps,
+            cfg_parallel_size=cfg_parallel_size,
+            sigmas=sigmas,
+            guidance_scale=guidance_scale,
+            num_images_per_prompt=num_images_per_prompt,
+            generator=generator,
+            latents=latents,
+            prompt_embeds=prompt_embeds,
+            prompt_embeds_mask=prompt_embeds_mask,
+            negative_prompt_embeds=negative_prompt_embeds,
+            negative_prompt_embeds_mask=negative_prompt_embeds_mask,
+            output_type=output_type,
+            return_dict=return_dict,
+            attention_kwargs=attention_kwargs,
             callback_on_step_end=callback_on_step_end,
             callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
-            max_sequence_length=max_sequence_length, image=image,
+            max_sequence_length=max_sequence_length,
+            image=image,
             prepare_dimensions_fn=prepare_dimensions,
             prepare_latents_data_fn=_prepare_latents_data,
             get_encode_image_fn=_get_encode_image,
-            calculate_shift_fn=calculate_shift, retrieve_timesteps_fn=retrieve_timesteps,
+            calculate_shift_fn=calculate_shift,
+            retrieve_timesteps_fn=retrieve_timesteps,
             output_class=QwenImagePipelineOutput,
         )

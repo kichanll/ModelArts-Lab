@@ -10,18 +10,20 @@ Note: This test uses importlib to directly load the lora module,
 bypassing x_diffusers/__init__.py to avoid complex dependency mocking.
 """
 
-import pytest
-import torch
-import sys
 import abc
 import importlib.util
-from unittest.mock import MagicMock, patch, PropertyMock
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+import torch
 
 
 # Create proper mock classes with correct metaclass for LoraLayer
-class MockBaseTunerLayer(abc.ABC):
+class MockBaseTunerLayer(abc.ABC):  # noqa: B024
     """Mock BaseTunerLayer with ABCMeta metaclass."""
+
     def __init__(self, base_layer):
         self.base_layer = base_layer
         self.r = {}
@@ -38,12 +40,13 @@ class MockBaseTunerLayer(abc.ABC):
     def get_base_layer(self):
         return self.base_layer
 
-    def update_layer(self, *args, **kwargs):
+    def update_layer(self, *args, **kwargs):  # noqa: B027
         pass
 
 
 class MockLoraLayer(MockBaseTunerLayer):
     """Mock LoraLayer with ABCMeta metaclass."""
+
     adapter_layer_names = ("lora_A", "lora_B")
     other_param_names = ("r", "lora_alpha", "scaling", "lora_dropout")
 
@@ -51,11 +54,22 @@ class MockLoraLayer(MockBaseTunerLayer):
 # Track modules that we mock for cleanup
 _MOCKED_MODULES = [
     "x_base",
-    "peft", "peft.tuners", "peft.tuners.lora", "peft.tuners.lora.model",
-    "peft.tuners.lora.aqlm", "peft.tuners.lora.awq", "peft.tuners.lora.eetq",
-    "peft.tuners.lora.gptq", "peft.tuners.lora.hqq", "peft.tuners.lora.layer",
-    "peft.tuners.lora.torchao", "peft.tuners.lora.tp_layer", "peft.tuners.tuners_utils",
-    "diffusers", "diffusers.loaders", "diffusers.loaders.peft",
+    "peft",
+    "peft.tuners",
+    "peft.tuners.lora",
+    "peft.tuners.lora.model",
+    "peft.tuners.lora.aqlm",
+    "peft.tuners.lora.awq",
+    "peft.tuners.lora.eetq",
+    "peft.tuners.lora.gptq",
+    "peft.tuners.lora.hqq",
+    "peft.tuners.lora.layer",
+    "peft.tuners.lora.torchao",
+    "peft.tuners.lora.tp_layer",
+    "peft.tuners.tuners_utils",
+    "diffusers",
+    "diffusers.loaders",
+    "diffusers.loaders.peft",
     "lora_module",
 ]
 
@@ -71,6 +85,7 @@ def _setup_all_mocks():
     # Create a proper class for WeightQuantLinearModule (needed for isinstance checks)
     class MockWeightQuantLinearModule(torch.nn.Module):
         """Mock WeightQuantLinearModule class."""
+
         def __init__(self, *args, **kwargs):
             super().__init__()
 
@@ -93,10 +108,10 @@ def _setup_all_mocks():
     mock_peft.tuners.tuners_utils.BaseTunerLayer = MockBaseTunerLayer
 
     # Create individual dispatch function mocks
-    for name in ['aqlm', 'awq', 'eetq', 'gptq', 'hqq', 'torchao']:
+    for name in ["aqlm", "awq", "eetq", "gptq", "hqq", "torchao"]:
         module = MagicMock()
         setattr(mock_peft.tuners.lora, name, module)
-        setattr(module, f'dispatch_{name}', MagicMock(return_value=None))
+        setattr(module, f"dispatch_{name}", MagicMock(return_value=None))
 
     # tp_layer special case
     tp_layer = MagicMock()
@@ -158,6 +173,7 @@ def _load_lora_module():
 # Fixtures
 # ============================================================================
 
+
 @pytest.fixture(scope="module")
 def lora_mocks():
     """Setup mocks for lora tests at module scope.
@@ -175,15 +191,15 @@ def lora_mocks():
 
     # Package all mocks and module components
     mocks = {
-        'mock_x_base': mock_x_base,
-        'mock_weight_quant': mock_weight_quant,
-        'mock_peft': mock_peft,
-        'mock_lora_model': mock_lora_model,
-        'mock_diffusers': mock_diffusers,
-        'lora_module': lora_module,
-        'LoraWeightQuantLinearModule': lora_module.LoraWeightQuantLinearModule,
-        'dispatch_wql': lora_module.dispatch_wql,
-        '_create_new_module_ascend': lora_module._create_new_module_ascend,
+        "mock_x_base": mock_x_base,
+        "mock_weight_quant": mock_weight_quant,
+        "mock_peft": mock_peft,
+        "mock_lora_model": mock_lora_model,
+        "mock_diffusers": mock_diffusers,
+        "lora_module": lora_module,
+        "LoraWeightQuantLinearModule": lora_module.LoraWeightQuantLinearModule,
+        "dispatch_wql": lora_module.dispatch_wql,
+        "_create_new_module_ascend": lora_module._create_new_module_ascend,
     }
 
     yield mocks
@@ -195,48 +211,49 @@ def lora_mocks():
 @pytest.fixture
 def mock_weight_quant(lora_mocks):
     """Get mock WeightQuantLinearModule class."""
-    return lora_mocks['mock_weight_quant']
+    return lora_mocks["mock_weight_quant"]
 
 
 @pytest.fixture
 def mock_peft(lora_mocks):
     """Get mock peft module."""
-    return lora_mocks['mock_peft']
+    return lora_mocks["mock_peft"]
 
 
 @pytest.fixture
 def mock_lora_model(lora_mocks):
     """Get mock LoraModel."""
-    return lora_mocks['mock_lora_model']
+    return lora_mocks["mock_lora_model"]
 
 
 @pytest.fixture
 def mock_diffusers(lora_mocks):
     """Get mock diffusers module."""
-    return lora_mocks['mock_diffusers']
+    return lora_mocks["mock_diffusers"]
 
 
 @pytest.fixture
 def LoraWeightQuantLinearModule(lora_mocks):
     """Get LoraWeightQuantLinearModule class."""
-    return lora_mocks['LoraWeightQuantLinearModule']
+    return lora_mocks["LoraWeightQuantLinearModule"]
 
 
 @pytest.fixture
 def dispatch_wql(lora_mocks):
     """Get dispatch_wql function."""
-    return lora_mocks['dispatch_wql']
+    return lora_mocks["dispatch_wql"]
 
 
 @pytest.fixture
 def _create_new_module_ascend(lora_mocks):
     """Get _create_new_module_ascend function."""
-    return lora_mocks['_create_new_module_ascend']
+    return lora_mocks["_create_new_module_ascend"]
 
 
 # ============================================================================
 # Test Classes
 # ============================================================================
+
 
 class TestLoraWeightQuantLinearModule:
     """Tests for LoraWeightQuantLinearModule class."""
@@ -260,7 +277,7 @@ class TestLoraWeightQuantLinearModule:
         mock_base_layer = MagicMock()
         mock_base_layer.__class__ = mock_weight_quant
 
-        with patch.object(MockLoraLayer, '__init__', return_value=None):
+        with patch.object(MockLoraLayer, "__init__", return_value=None):
             module = LoraWeightQuantLinearModule(
                 base_layer=mock_base_layer,
                 adapter_name="test_adapter",
@@ -277,7 +294,7 @@ class TestLoraWeightQuantLinearModule:
         mock_base_layer = MagicMock()
         mock_base_layer.return_value = torch.randn(2, 3)
 
-        with patch.object(MockLoraLayer, '__init__', return_value=None):
+        with patch.object(MockLoraLayer, "__init__", return_value=None):
             module = LoraWeightQuantLinearModule(
                 base_layer=mock_base_layer,
                 adapter_name="test_adapter",
@@ -287,7 +304,7 @@ class TestLoraWeightQuantLinearModule:
         module.quant_linear_module = mock_base_layer
 
         x = torch.randn(2, 4)
-        result = module.forward(x)
+        result = module.forward(x)  # noqa: F841
 
         mock_base_layer.assert_called_once_with(x)
 
@@ -297,7 +314,7 @@ class TestLoraWeightQuantLinearModule:
         base_output = torch.randn(2, 3)
         mock_base_layer.return_value = base_output
 
-        with patch.object(MockLoraLayer, '__init__', return_value=None):
+        with patch.object(MockLoraLayer, "__init__", return_value=None):
             module = LoraWeightQuantLinearModule(
                 base_layer=mock_base_layer,
                 adapter_name="test_adapter",
@@ -322,7 +339,7 @@ class TestLoraWeightQuantLinearModule:
 
         x = torch.randn(2, 4)
 
-        with patch('torch.is_autocast_enabled', return_value=True):
+        with patch("torch.is_autocast_enabled", return_value=True):
             result = module.forward(x)
 
         assert result is not None
@@ -331,7 +348,7 @@ class TestLoraWeightQuantLinearModule:
         """Test __repr__ method returns prefixed representation."""
         mock_base_layer = MagicMock()
 
-        with patch.object(MockLoraLayer, '__init__', return_value=None):
+        with patch.object(MockLoraLayer, "__init__", return_value=None):
             module = LoraWeightQuantLinearModule(
                 base_layer=mock_base_layer,
                 adapter_name="test_adapter",
@@ -353,7 +370,7 @@ class TestDispatchWql:
 
         # Should return a LoraWeightQuantLinearModule instance or None (depending on mock setup)
         # The test verifies that dispatch_wql handles WeightQuantLinearModule without raising exceptions
-        assert result is None or hasattr(result, 'quant_linear_module')
+        assert result is None or hasattr(result, "quant_linear_module")
 
     def test_dispatch_with_base_tuner_layer(self, dispatch_wql, mock_weight_quant):
         """Test dispatch handles BaseTunerLayer wrapped modules."""
@@ -366,10 +383,11 @@ class TestDispatchWql:
 
         # Verify that dispatch handled BaseTunerLayer by calling get_base_layer
         # Result should be None or a valid module instance
-        assert result is None or hasattr(result, 'quant_linear_module')
+        assert result is None or hasattr(result, "quant_linear_module")
 
     def test_dispatch_with_unsupported_module(self, dispatch_wql):
         """Test dispatch returns None for unsupported module types."""
+
         # Create a real class to avoid issubclass() TypeError
         class UnsupportedModule:
             pass
@@ -388,9 +406,7 @@ class TestCreateNewModuleAscend:
     def test_with_custom_modules(self, _create_new_module_ascend, mock_weight_quant):
         """Test _create_new_module_ascend with custom modules."""
         mock_lora_config = MagicMock()
-        mock_lora_config._custom_modules = {
-            mock_weight_quant: MagicMock(return_value=MagicMock())
-        }
+        mock_lora_config._custom_modules = {mock_weight_quant: MagicMock(return_value=MagicMock())}
 
         mock_target = MagicMock()
         mock_target.__class__ = mock_weight_quant
@@ -413,7 +429,7 @@ class TestCreateNewModuleAscend:
         # The function should call dispatch_default which handles torch.nn.Linear
         # We mock it to return a valid module
         mock_result = MagicMock()
-        with patch.object(mock_peft.tuners.lora.layer, 'dispatch_default', return_value=mock_result):
+        with patch.object(mock_peft.tuners.lora.layer, "dispatch_default", return_value=mock_result):
             result = _create_new_module_ascend(mock_lora_config, "test_adapter", linear)
 
         # Result should be the mock_result from dispatch_default
@@ -431,7 +447,7 @@ class TestCreateNewModuleAscend:
         unsupported = UnsupportedModule()
 
         # All dispatchers return None
-        with patch.object(mock_peft.tuners.lora.layer, 'dispatch_default', return_value=None):
+        with patch.object(mock_peft.tuners.lora.layer, "dispatch_default", return_value=None):  # noqa: SIM117
             with pytest.raises(ValueError) as exc_info:
                 _create_new_module_ascend(mock_lora_config, "test_adapter", unsupported)
         assert "not supported" in str(exc_info.value)
@@ -443,7 +459,7 @@ class TestLoraModelPatching:
     def test_lora_model_create_new_module_patched(self, mock_lora_model):
         """Test that LoraModel._create_new_module is patched."""
         # The module patches LoraModel._create_new_module on import
-        assert hasattr(mock_lora_model, '_create_new_module')
+        assert hasattr(mock_lora_model, "_create_new_module")
 
     def test_adapter_scale_fn_mapping_updated(self, mock_diffusers):
         """Test that _SET_ADAPTER_SCALE_FN_MAPPING is updated."""

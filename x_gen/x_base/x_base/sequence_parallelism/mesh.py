@@ -3,6 +3,7 @@ Sequence Parallelism - ProcessGroup Mesh & Parallel Manager
 
 ProcessGroup 网格管理和并行管理器。
 """
+
 from __future__ import annotations
 
 import gc
@@ -10,7 +11,6 @@ import itertools
 from dataclasses import dataclass
 from functools import reduce
 from operator import mul
-from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -18,14 +18,14 @@ import torch.distributed as dist
 from torch.distributed import ProcessGroup
 from torch.distributed.distributed_c10d import GroupMember
 
-from .errors import ParallelConfigError, BackendNotAvailableError
-
+from .errors import BackendNotAvailableError, ParallelConfigError
 
 # =============================================================================
 # ProcessGroupMesh
 # =============================================================================
 
-def _prod(nums: List[int]) -> int:
+
+def _prod(nums: list[int]) -> int:
     return reduce(mul, nums, 1)
 
 
@@ -44,18 +44,16 @@ class ProcessGroupMesh:
         prod_size = _prod(list(size))
 
         if prod_size != world_size:
-            raise RuntimeError(
-                f"Product of mesh sizes ({prod_size}) must equal world_size ({world_size})."
-            )
+            raise RuntimeError(f"Product of mesh sizes ({prod_size}) must equal world_size ({world_size}).")
 
-        self._shape: Tuple[int, ...] = tuple(size)
+        self._shape: tuple[int, ...] = tuple(size)
         self._rank: int = dist.get_rank()
-        self._coord: Tuple[int, ...] = self._unravel(self._rank, self._shape)
-        self._ranks_to_group: Dict[Tuple[int, ...], Union[ProcessGroup, object]] = {}
-        self._group_to_ranks: Dict[ProcessGroup, Tuple[int, ...]] = {}
+        self._coord: tuple[int, ...] = self._unravel(self._rank, self._shape)
+        self._ranks_to_group: dict[tuple[int, ...], ProcessGroup | object] = {}
+        self._group_to_ranks: dict[ProcessGroup, tuple[int, ...]] = {}
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         return self._shape
 
     @property
@@ -63,14 +61,14 @@ class ProcessGroupMesh:
         return self._rank
 
     @staticmethod
-    def _unravel(rank: int, shape: Tuple[int, ...]) -> Tuple[int, ...]:
+    def _unravel(rank: int, shape: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(np.unravel_index(rank, shape))
 
     @staticmethod
-    def _ravel(coord: Tuple[int, ...], shape: Tuple[int, ...], mode: str = "raise") -> int:
+    def _ravel(coord: tuple[int, ...], shape: tuple[int, ...], mode: str = "raise") -> int:
         return int(np.ravel_multi_index(coord, shape, mode=mode))
 
-    def _get_group(self, ranks: List[int], backend: Optional[str] = None) -> ProcessGroup:
+    def _get_group(self, ranks: list[int], backend: str | None = None) -> ProcessGroup:
         ranks = sorted(ranks)
         key = tuple(ranks)
         if key not in self._ranks_to_group:
@@ -82,9 +80,9 @@ class ProcessGroupMesh:
 
     def get_group_along_axis(
         self,
-        axis: Union[int, List[int]],
-        indices_at_axis: Optional[Union[List[int], List[List[int]]]] = None,
-        backend: Optional[str] = None,
+        axis: int | list[int],
+        indices_at_axis: list[int] | list[list[int]] | None = None,
+        backend: str | None = None,
     ) -> ProcessGroup:
         """获取当前进程沿指定轴的 ProcessGroup"""
         if isinstance(axis, int):
@@ -93,7 +91,7 @@ class ProcessGroupMesh:
                 indices_at_axis = [indices_at_axis]
 
         if indices_at_axis is None:
-            if isinstance(axis, (list, tuple)):
+            if isinstance(axis, (list, tuple)):  # noqa: UP038
                 indices_at_axis = [list(range(self._shape[ax])) for ax in axis]
             else:
                 indices_at_axis = list(range(self._shape[axis]))
@@ -106,11 +104,8 @@ class ProcessGroupMesh:
         return self._ranks_to_group[ranks]
 
     def _get_coords_along_axis(
-        self,
-        base_coord: Tuple[int, ...],
-        axis: List[int],
-        indices: List[List[int]]
-    ) -> List[Tuple[int, ...]]:
+        self, base_coord: tuple[int, ...], axis: list[int], indices: list[list[int]]
+    ) -> list[tuple[int, ...]]:
         for ax, idxs in zip(axis, indices):
             if ax < 0 or ax >= len(base_coord):
                 raise ValueError(f"Axis {ax} out of bounds for coordinate of dimension {len(base_coord)}")
@@ -118,17 +113,15 @@ class ProcessGroupMesh:
         for ax, idxs in zip(axis, indices):
             new_coords = []
             for coord in coords:
-                new_coords.extend([
-                    coord[:ax] + (i,) + coord[ax + 1:] for i in idxs
-                ])
+                new_coords.extend([coord[:ax] + (i,) + coord[ax + 1 :] for i in idxs])
             coords = new_coords
         return coords
 
     def _create_group_along_axis(
         self,
-        axis: List[int],
-        indices_at_axis: List[List[int]],
-        backend: Optional[str],
+        axis: list[int],
+        indices_at_axis: list[list[int]],
+        backend: str | None,
     ) -> ProcessGroup:
         reduced_shape = list(self._shape)
         for ax in axis:
@@ -155,14 +148,16 @@ class ProcessGroupMesh:
 # ParallelConfig & ParallelManager
 # =============================================================================
 
+
 @dataclass
 class ParallelConfig:
     """并行配置"""
+
     dp_size: int = 1
     cp_size: int = 1
     sp_size: int = 1
-    sp_ulysses_size: Optional[int] = None
-    sp_ring_size: Optional[int] = None
+    sp_ulysses_size: int | None = None
+    sp_ring_size: int | None = None
 
     def validate(self, world_size: int) -> None:
         total = self.dp_size * self.cp_size * self.sp_size
@@ -174,8 +169,7 @@ class ParallelConfig:
         if self.sp_ulysses_size and self.sp_ring_size:
             if self.sp_ulysses_size * self.sp_ring_size != self.sp_size:
                 raise ParallelConfigError(
-                    f"ulysses({self.sp_ulysses_size}) * ring({self.sp_ring_size}) "
-                    f"!= sp({self.sp_size})"
+                    f"ulysses({self.sp_ulysses_size}) * ring({self.sp_ring_size}) " f"!= sp({self.sp_size})"
                 )
 
 
@@ -187,8 +181,8 @@ class ParallelManager:
         dp_size: int,
         cp_size: int,
         sp_size: int,
-        sp_ulysses_size: Optional[int] = None,
-        sp_ring_size: Optional[int] = None,
+        sp_ulysses_size: int | None = None,
+        sp_ring_size: int | None = None,
     ) -> None:
         self._config = ParallelConfig(dp_size, cp_size, sp_size, sp_ulysses_size, sp_ring_size)
         self._config.validate(dist.get_world_size())
@@ -246,23 +240,19 @@ class ParallelManager:
 # 初始化函数
 # =============================================================================
 
+
 def initialize(
     rank: int = 0,
     world_size: int = 1,
-    init_method: Optional[str] = None,
+    init_method: str | None = None,
     backend: str = "nccl",
 ) -> None:
     """初始化分布式环境"""
     if not dist.is_initialized():
-        dist.init_process_group(
-            backend=backend,
-            init_method=init_method,
-            world_size=world_size,
-            rank=rank
-        )
+        dist.init_process_group(backend=backend, init_method=init_method, world_size=world_size, rank=rank)
         if torch.cuda.is_available():
             torch.cuda.set_device(rank)
-        if hasattr(torch.backends.cuda.matmul, 'allow_tf32'):
+        if hasattr(torch.backends.cuda.matmul, "allow_tf32"):
             torch.backends.cuda.matmul.allow_tf32 = True
-        if hasattr(torch.backends.cudnn, 'allow_tf32'):
+        if hasattr(torch.backends.cudnn, "allow_tf32"):
             torch.backends.cudnn.allow_tf32 = True

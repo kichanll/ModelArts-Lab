@@ -12,10 +12,6 @@ No sys.modules mocking is needed as we test mathematical operations and shapes.
 
 import math
 
-import pytest
-import torch
-import torch.nn as nn
-
 
 class TestAutoencoderKLHunyuanVideoConfig:
     """Tests for AutoencoderKLHunyuanVideo configuration."""
@@ -23,11 +19,11 @@ class TestAutoencoderKLHunyuanVideoConfig:
     def test_default_config(self):
         """Test default configuration values."""
         in_channels = 3
-        out_channels = 3
+        out_channels = 3  # noqa: F841
         latent_channels = 16
         block_out_channels = (128, 256, 512, 512)
-        layers_per_block = 2
-        act_fn = "silu"
+        layers_per_block = 2  # noqa: F841
+        act_fn = "silu"  # noqa: F841
         spatial_compression_ratio = 8
         temporal_compression_ratio = 4
 
@@ -66,7 +62,7 @@ class TestQuantConvLayers:
     def test_quant_conv_shape(self):
         """Test quant conv kernel shape."""
         latent_channels = 16
-        kernel_size = 1
+        kernel_size = 1  # noqa: F841
 
         # quant_conv: 2 * latent_channels -> 2 * latent_channels
         in_ch = 2 * latent_channels
@@ -78,7 +74,7 @@ class TestQuantConvLayers:
     def test_post_quant_conv_shape(self):
         """Test post quant conv kernel shape."""
         latent_channels = 16
-        kernel_size = 1
+        kernel_size = 1  # noqa: F841
 
         # post_quant_conv: latent_channels -> latent_channels
         in_ch = latent_channels
@@ -134,7 +130,7 @@ class TestEnableTiling:
         use_tiling = False
         use_tiling = True  # enable_tiling()
 
-        assert use_tiling == True
+        assert use_tiling == True  # noqa: E712
 
     def test_enable_tiling_updates_params(self):
         """Test enable_tiling updates tile parameters."""
@@ -156,7 +152,7 @@ class TestEnableTiling:
         use_tiling = True
         use_tiling = False  # disable_tiling()
 
-        assert use_tiling == False
+        assert use_tiling == False  # noqa: E712
 
 
 class TestEnableSlicing:
@@ -167,14 +163,14 @@ class TestEnableSlicing:
         use_slicing = False
         use_slicing = True  # enable_slicing()
 
-        assert use_slicing == True
+        assert use_slicing == True  # noqa: E712
 
     def test_disable_slicing(self):
         """Test disable_slicing sets use_slicing to False."""
         use_slicing = True
         use_slicing = False  # disable_slicing()
 
-        assert use_slicing == False
+        assert use_slicing == False  # noqa: E712
 
 
 class TestFramewiseSettings:
@@ -183,12 +179,12 @@ class TestFramewiseSettings:
     def test_use_framewise_encoding_default(self):
         """Test use_framewise_encoding default."""
         use_framewise_encoding = True
-        assert use_framewise_encoding == True
+        assert use_framewise_encoding == True  # noqa: E712
 
     def test_use_framewise_decoding_default(self):
         """Test use_framewise_decoding default."""
         use_framewise_decoding = True
-        assert use_framewise_decoding == True
+        assert use_framewise_decoding == True  # noqa: E712
 
 
 class TestLightningFlag:
@@ -197,7 +193,7 @@ class TestLightningFlag:
     def test_lightning_default(self):
         """Test lightning default value."""
         lightning = False
-        assert lightning == False
+        assert lightning == False  # noqa: E712
 
 
 class TestMaxShapeSettings:
@@ -229,7 +225,7 @@ class TestClassAttributes:
     def test_supports_gradient_checkpointing(self):
         """Test gradient checkpointing support."""
         _supports_gradient_checkpointing = True
-        assert _supports_gradient_checkpointing == True
+        assert _supports_gradient_checkpointing == True  # noqa: E712
 
 
 class TestEncoderDecoderStructure:
@@ -238,7 +234,7 @@ class TestEncoderDecoderStructure:
     def test_encoder_double_z(self):
         """Test encoder outputs double z for KL."""
         double_z = True
-        assert double_z == True
+        assert double_z == True  # noqa: E712
 
     def test_block_types(self):
         """Test block types for encoder/decoder."""
@@ -261,4 +257,4 @@ class TestEncoderDecoderStructure:
     def test_mid_block_add_attention(self):
         """Test mid block attention."""
         mid_block_add_attention = True
-        assert mid_block_add_attention == True
+        assert mid_block_add_attention == True  # noqa: E712

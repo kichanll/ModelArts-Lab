@@ -8,9 +8,7 @@ def z_image_rope_embedder_call__(self, ids: torch.Tensor):
     device = ids.device
 
     if self.freqs_cis is None:
-        self.freqs_cis = self.precompute_freqs_cis(
-            self.axes_dims, self.axes_lens, theta=self.theta
-        )
+        self.freqs_cis = self.precompute_freqs_cis(self.axes_dims, self.axes_lens, theta=self.theta)
         self.freqs_cis = [freqs_cis.to(device) for freqs_cis in self.freqs_cis]
     else:
         # Ensure freqs_cis are on the same device as ids

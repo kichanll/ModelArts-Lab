@@ -1,14 +1,14 @@
 """
 Integration tests for x_diffusers.framework.vae modules with NPU mocking.
 """
+
+import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
 import torch
-import sys
-from unittest.mock import MagicMock, patch, Mock
 
-from tests.conftest import (
-    MockNPUModule, MockAttentionManager, MockParallelManager
-)
+from tests.conftest import MockNPUModule, MockParallelManager
 
 
 class TestWanVAEWithMock:
@@ -17,16 +17,16 @@ class TestWanVAEWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
         mock_x_base.ParallelManager = MockParallelManager
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
-        self.torch_npu_patcher = patch.object(torch, 'npu', MockNPUModule())
+        self.torch_npu_patcher = patch.object(torch, "npu", MockNPUModule())
         self.torch_npu_patcher.start()
 
         yield
@@ -39,6 +39,7 @@ class TestWanVAEWithMock:
         """Test post quant conv in decode."""
         try:
             from x_diffusers.framework.vae.wan import decode_ascend
+
             assert decode_ascend is not None
         except ImportError:
             pytest.skip("decode_ascend not available")
@@ -47,6 +48,7 @@ class TestWanVAEWithMock:
         """Test frame iteration in decode."""
         try:
             from x_diffusers.framework.vae.wan import decode_ascend
+
             assert decode_ascend is not None
         except ImportError:
             pytest.skip("decode_ascend not available")
@@ -65,6 +67,7 @@ class TestWanVAEWithMock:
         """Test output permutation in postprocess_video."""
         try:
             from x_diffusers.framework.vae.wan import postprocess_video_ascend
+
             assert postprocess_video_ascend is not None
         except ImportError:
             pytest.skip("postprocess_video_ascend not available")
@@ -110,7 +113,7 @@ class TestWanVAEWithMock:
         """Test VFI skip frame calculation."""
         # Skip frames based on frame index
         frame_idx = 8
-        is_skip = (frame_idx % 2 == 0)
+        is_skip = frame_idx % 2 == 0
 
         # Even frames are skipped in some modes
         assert isinstance(is_skip, bool)
@@ -122,12 +125,12 @@ class TestWanResampleWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
@@ -139,35 +142,35 @@ class TestWanResampleWithMock:
         """Test Upsample2D initialization."""
         from x_diffusers.framework.vae.wan import AscendWanResample
 
-        resample = AscendWanResample(dim=16, mode='upsample2d')
+        resample = AscendWanResample(dim=16, mode="upsample2d")
         assert resample is not None
 
     def test_init_upsample3d(self):
         """Test Upsample3D initialization."""
         from x_diffusers.framework.vae.wan import AscendWanResample
 
-        resample = AscendWanResample(dim=16, mode='upsample3d')
+        resample = AscendWanResample(dim=16, mode="upsample3d")
         assert resample is not None
 
     def test_init_downsample2d(self):
         """Test Downsample2D initialization."""
         from x_diffusers.framework.vae.wan import AscendWanResample
 
-        resample = AscendWanResample(dim=16, mode='downsample2d')
+        resample = AscendWanResample(dim=16, mode="downsample2d")
         assert resample is not None
 
     def test_init_downsample3d(self):
         """Test Downsample3D initialization."""
         from x_diffusers.framework.vae.wan import AscendWanResample
 
-        resample = AscendWanResample(dim=16, mode='downsample3d')
+        resample = AscendWanResample(dim=16, mode="downsample3d")
         assert resample is not None
 
     def test_init_none_mode(self):
         """Test resample with none mode."""
         from x_diffusers.framework.vae.wan import AscendWanResample
 
-        resample = AscendWanResample(dim=16, mode='none')
+        resample = AscendWanResample(dim=16, mode="none")
         assert resample is not None
 
     def test_forward_reshape(self):
@@ -189,12 +192,12 @@ class TestFeatureCacheWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
@@ -229,12 +232,12 @@ class TestModelTypeWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
@@ -256,13 +259,13 @@ class TestHunyuanVAEWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
         mock_x_base.ParallelManager = MockParallelManager
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
@@ -318,20 +321,20 @@ class TestHunyuanVAEWithMock:
     def test_enable_tiling_sets_flag(self):
         """Test enable_tiling sets flag."""
         use_tiling = True
-        assert use_tiling == True
+        assert use_tiling == True  # noqa: E712
 
     def test_enable_slicing(self):
         """Test enable_slicing."""
         use_slicing = True
-        assert use_slicing == True
+        assert use_slicing == True  # noqa: E712
 
     def test_framewise_settings_default(self):
         """Test framewise settings default."""
         use_framewise_encoding = False
         use_framewise_decoding = False
 
-        assert use_framewise_encoding == False
-        assert use_framewise_decoding == False
+        assert use_framewise_encoding == False  # noqa: E712
+        assert use_framewise_decoding == False  # noqa: E712
 
 
 class TestCogVideoXVAEWithMock:
@@ -340,12 +343,12 @@ class TestCogVideoXVAEWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
@@ -357,33 +360,21 @@ class TestCogVideoXVAEWithMock:
         """Test CausalConv3d initialization."""
         from x_diffusers.framework.vae.cogvideox import AscendCogVideoXCausalConv3d
 
-        conv = AscendCogVideoXCausalConv3d(
-            in_channels=16,
-            out_channels=16,
-            kernel_size=3
-        )
+        conv = AscendCogVideoXCausalConv3d(in_channels=16, out_channels=16, kernel_size=3)
         assert conv is not None
 
     def test_causal_conv3d_kernel_size_int(self):
         """Test CausalConv3d with int kernel size."""
         from x_diffusers.framework.vae.cogvideox import AscendCogVideoXCausalConv3d
 
-        conv = AscendCogVideoXCausalConv3d(
-            in_channels=16,
-            out_channels=16,
-            kernel_size=3
-        )
+        conv = AscendCogVideoXCausalConv3d(in_channels=16, out_channels=16, kernel_size=3)
         assert conv is not None
 
     def test_causal_conv3d_kernel_size_tuple(self):
         """Test CausalConv3d with tuple kernel size."""
         from x_diffusers.framework.vae.cogvideox import AscendCogVideoXCausalConv3d
 
-        conv = AscendCogVideoXCausalConv3d(
-            in_channels=16,
-            out_channels=16,
-            kernel_size=(3, 3, 3)
-        )
+        conv = AscendCogVideoXCausalConv3d(in_channels=16, out_channels=16, kernel_size=(3, 3, 3))
         assert conv is not None
 
     def test_causal_conv3d_padding_calculation(self):
@@ -427,7 +418,7 @@ class TestCogVideoXVAEWithMock:
         batch_size = 1
 
         # Process frames in batches
-        frames_per_batch = 8
+        frames_per_batch = 8  # noqa: F841
 
         assert num_frames > 0
         assert batch_size == 1
@@ -435,24 +426,24 @@ class TestCogVideoXVAEWithMock:
     def test_lightning_flag_default(self):
         """Test lightning flag default."""
         lightning = False
-        assert lightning == False
+        assert lightning == False  # noqa: E712
 
     def test_lightning_enabled(self):
         """Test lightning flag enabled."""
         lightning = True
-        assert lightning == True
+        assert lightning == True  # noqa: E712
 
     def test_use_slicing_default(self):
         """Test use_slicing default."""
         use_slicing = False
-        assert use_slicing == False
+        assert use_slicing == False  # noqa: E712
 
     def test_use_tiling_default(self):
         """Test use_tiling default."""
         use_tiling = False
-        assert use_tiling == False
+        assert use_tiling == False  # noqa: E712
 
     def test_supports_gradient_checkpointing(self):
         """Test supports_gradient_checkpointing."""
         supports_gradient_checkpointing = True
-        assert supports_gradient_checkpointing == True
+        assert supports_gradient_checkpointing == True  # noqa: E712

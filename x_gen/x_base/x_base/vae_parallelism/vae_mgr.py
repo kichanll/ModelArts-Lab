@@ -1,20 +1,16 @@
-import io
 import math
-from typing import List, Tuple, Union
 
-import matplotlib.lines as lines
-import matplotlib.patches as patches
-import matplotlib.pyplot as plt
 import numpy as np
-from diffusers.models.autoencoders.vae import DecoderOutput
-from functorch.einops import rearrange
-from PIL import Image
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
+from diffusers.models.autoencoders.vae import DecoderOutput
+from functorch.einops import rearrange
+from PIL import Image
 
 from ..utils.infer_info import infer_info
 from .save_video_stream import SaveVideoStream
+
 
 class VAEManager:
     def __init__(
@@ -77,7 +73,7 @@ class VAEManager:
             self.out_pad_size = infer_info.vae_pad_latent_size * factor
 
         # 3. 计算输入侧尺寸
-        if pad_mode=="tail_only":
+        if pad_mode == "tail_only":
             # 步长 = (总长 - 单倍Padding) / 块数。
             self.in_stride_h = math.ceil((total_in_h - self.in_pad_size) / self.num_h_tiles)
             self.in_stride_w = math.ceil((total_in_w - self.in_pad_size) / self.num_w_tiles)
@@ -115,7 +111,6 @@ class VAEManager:
         # [新增] 用于存储 all_sides_valid 模式下的补全信息
         # 格式: (pad_left, pad_right, pad_top, pad_bottom)
         self._curr_pad_info = (0, 0, 0, 0)
-
 
     def get_tile_from_x(self, x: torch.Tensor) -> torch.Tensor:
         if self.pad_mode == "all_sides_valid":
@@ -164,18 +159,15 @@ class VAEManager:
         x = x.view(B, C, T, H_padded, W_padded)
 
         # 6. 获得具体切片，根据当前 Rank 从完整输入 x 中切分出对应的 Tile
-        h_idx = self.tile_rank  // self.num_w_tiles
-        w_idx = self.tile_rank  % self.num_w_tiles
+        h_idx = self.tile_rank // self.num_w_tiles
+        w_idx = self.tile_rank % self.num_w_tiles
 
         # 计算切片起始点 (基于 Stride)
         h_start = h_idx * self.in_stride_h
         w_start = w_idx * self.in_stride_w
 
         # 裁剪：从 start 开始，切 window 大小
-        return x[:, :, :,
-               h_start : h_start + self.in_window_h,
-               w_start : w_start + self.in_window_w]
-
+        return x[:, :, :, h_start : h_start + self.in_window_h, w_start : w_start + self.in_window_w]
 
     def _get_tile_valid_mode(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -219,7 +211,6 @@ class VAEManager:
         tile = x[:, :, :, h_start_valid:h_end_valid, w_start_valid:w_end_valid]
         return tile
 
-
     def align_out(self, out: torch.Tensor) -> torch.Tensor:
         """
         根据输入时缺失的像素，对输出 Tensor 进行补全，使其恢复到 out_window 的大小。
@@ -248,7 +239,7 @@ class VAEManager:
             # F.pad 顺序: (Left, Right, Top, Bottom)
             # 补的值通常是 0 (constant)，因为这些区域在 merge 时会被切掉 (overlap)
             if pl > 0 or pr > 0 or pt > 0 or pb > 0:
-                out = F.pad(out, (pl, pr, pt, pb), mode='constant', value=0)
+                out = F.pad(out, (pl, pr, pt, pb), mode="constant", value=0)
             return out
 
         else:
@@ -258,7 +249,6 @@ class VAEManager:
             if out.shape[-1] < self.out_window_w:
                 out = F.pad(out, (0, self.out_window_w - out.shape[-1]))
             return out
-
 
     def collect_out(self, out: torch.Tensor) -> torch.Tensor:
         """
@@ -293,7 +283,6 @@ class VAEManager:
         out = out[:, :, :, :final_h, :final_w]
         return out
 
-
     def _blend_tile(self, i: int, j: int, spatial_grid: list, tile: torch.Tensor) -> torch.Tensor:
         """抽离：处理 tile 的混合（Blend）逻辑"""
         if not self.use_blend:
@@ -304,7 +293,6 @@ class VAEManager:
         if j > 0:
             tile = blend_h(spatial_grid[i][j - 1], tile, self.blend_w)
         return tile
-
 
     def _crop_tile(self, i: int, j: int, n_rows: int, n_cols: int, tile: torch.Tensor) -> torch.Tensor:
         """抽离：处理 tile 的裁剪（Crop）逻辑"""
@@ -325,10 +313,9 @@ class VAEManager:
             left_crop = self.blend_w // 2 if j == 0 else 0
             right_crop = self.blend_w // 2 if j == n_cols - 1 else self.blend_w
 
-            return tile[..., top_crop: -bottom_crop, left_crop: -right_crop]
+            return tile[..., top_crop:-bottom_crop, left_crop:-right_crop]
 
         return tile
-
 
     def _merge_tiles(self, spatial_grid) -> torch.Tensor:
         """
@@ -354,11 +341,9 @@ class VAEManager:
         # 按高度拼接所有行
         return torch.cat(result_rows, dim=-2)
 
-
     def create_video_stream(self):
         if infer_info.task_type != "t2i" and self.rank == 0:
             self.save_video_stream = SaveVideoStream()
-
 
     def write_video_stream(self, out: torch.Tensor):
         if self.rank == 0:
@@ -373,7 +358,6 @@ class VAEManager:
                 im.save(infer_info.save_path)
             else:
                 self.save_video_stream.save(out)
-
 
     def close_video_stream(self):
         if infer_info.task_type != "t2i" and self.rank == 0:
@@ -407,7 +391,7 @@ def split_rectangle(total_height: int, total_width: int, world_size: int):
             num_cols = world_size // num_rows
             factor_pairs.append((num_rows, num_cols))
 
-    min_ratio_diff = float('inf')
+    min_ratio_diff = float("inf")
     best_rows = 1
     best_cols = world_size
 
@@ -447,8 +431,9 @@ def blend_h(a: torch.Tensor, b: torch.Tensor, blend_extent: int) -> torch.Tensor
 def blend_t(a: torch.Tensor, b: torch.Tensor, blend_extent: int) -> torch.Tensor:
     blend_extent = min(a.shape[-3], b.shape[-3], blend_extent)
     for x in range(blend_extent):
-        b[:, :, x, :, :] = (a[:, :, -blend_extent + x, :, :] * (1 - x / blend_extent) +
-                            b[:, :, x, :, :] * (x / blend_extent))
+        b[:, :, x, :, :] = a[:, :, -blend_extent + x, :, :] * (1 - x / blend_extent) + b[:, :, x, :, :] * (
+            x / blend_extent
+        )
     return b
 
 
@@ -473,17 +458,17 @@ def parallel_data_generator(gathered_results, gathered_dim_metadata):
         _start_shape = 0
         for shape in per_rank_metadata:
             mul_shape = math.prod(shape)
-            yield (gathered_results[i, _start_shape:_start_shape + mul_shape].reshape(shape), global_idx)
+            yield (gathered_results[i, _start_shape : _start_shape + mul_shape].reshape(shape), global_idx)
             _start_shape += mul_shape
             global_idx += 1
 
 
 def parallel_spatial_tiled_decode(
-        self,
-        z: torch.FloatTensor,
-        return_dict: bool = True,
-        use_conv_cache: bool = True,
-) -> Union[DecoderOutput, torch.FloatTensor]:
+    self,
+    z: torch.FloatTensor,
+    return_dict: bool = True,
+    use_conv_cache: bool = True,
+) -> DecoderOutput | torch.FloatTensor:
     """
     仅基于空间维度分块的并行解码，时间维度保持完整
     """
@@ -524,9 +509,13 @@ def parallel_spatial_tiled_decode(
         w_start = w_idx * s_overlap_size
 
         # 提取完整时间维度的分块
-        tile = z[:, :, :,  # 时间维度全保留
-               h_start:h_start + self.tile_latent_min_size,
-               w_start:w_start + self.tile_latent_min_size]
+        tile = z[
+            :,
+            :,
+            :,  # 时间维度全保留
+            h_start : h_start + self.tile_latent_min_size,
+            w_start : w_start + self.tile_latent_min_size,
+        ]
 
         # 处理分块
         if self.post_quant_conv is not None:
@@ -550,7 +539,7 @@ def parallel_spatial_tiled_decode(
     max_size = max(size.item() for size in all_sizes)
 
     padded_results = torch.zeros(max_size, device=results.device)
-    padded_results[:results.size(0)] = results
+    padded_results[: results.size(0)] = results
 
     gathered_dim_metadata = [None] * world_size
     gathered_results = torch.zeros_like(padded_results).repeat(world_size, 1).contiguous()
@@ -575,13 +564,13 @@ def parallel_spatial_tiled_decode(
 
 # vae3
 def temporal_tiled_decode(
-        self,
-        z: torch.FloatTensor,
-        return_dict: bool = True,
-        sample_shape=None,
-        save_path: str = None,
-        use_conv_cache: bool = True,
-) -> Union[DecoderOutput, torch.FloatTensor]:
+    self,
+    z: torch.FloatTensor,
+    return_dict: bool = True,
+    sample_shape=None,
+    save_path: str = None,
+    use_conv_cache: bool = True,
+) -> DecoderOutput | torch.FloatTensor:
     B, C, T, H, W = z.shape
     overlap_size = int(self.tile_latent_min_tsize * (1 - self.tile_overlap_factor))
     blend_extent_default = int(self.tile_sample_min_tsize * self.tile_overlap_factor)
@@ -596,14 +585,13 @@ def temporal_tiled_decode(
     for i in range(0, T, overlap_size):
         latent_end = min(i + self.tile_latent_min_tsize + 1, T)
         tile = z[:, :, i:latent_end, :, :]
-        decoded = self.parallel_spatial_tiled_decode(
-            tile, return_dict=True, use_conv_cache=use_conv_cache).sample
+        decoded = self.parallel_spatial_tiled_decode(tile, return_dict=True, use_conv_cache=use_conv_cache).sample
 
         actual_len = decoded.shape[2]
 
         curr_blend = min(blend_extent_default, actual_len - 1)
-        is_first = (i == 0)
-        is_last = (latent_end == T)
+        is_first = i == 0
+        is_last = latent_end == T
 
         if not is_first:
             decoded = decoded[:, :, 1:, :, :]
@@ -643,11 +631,11 @@ def temporal_tiled_decode(
 
 
 def tiled_decode_parallel(
-        self,
-        z: torch.FloatTensor,
-        return_dict: bool = True,
-        use_conv_cache: bool = True,
-) -> Union[DecoderOutput, torch.FloatTensor]:
+    self,
+    z: torch.FloatTensor,
+    return_dict: bool = True,
+    use_conv_cache: bool = True,
+) -> DecoderOutput | torch.FloatTensor:
     """
     Parallel version of tiled_decode that distributes both temporal and spatial computation across GPUs
     """
@@ -655,15 +643,11 @@ def tiled_decode_parallel(
     world_size = dist.get_world_size()
     B, C, T, H, W = z.shape
     # Calculate parameters
-    t_overlap_size = int(self.tile_latent_min_tsize *
-                         (1 - self.tile_overlap_factor))
-    t_blend_extent = int(self.tile_sample_min_tsize *
-                         self.tile_overlap_factor)
+    t_overlap_size = int(self.tile_latent_min_tsize * (1 - self.tile_overlap_factor))
+    t_blend_extent = int(self.tile_sample_min_tsize * self.tile_overlap_factor)
     t_limit = self.tile_sample_min_tsize - t_blend_extent
-    s_overlap_size = int(self.tile_latent_min_size *
-                         (1 - self.tile_overlap_factor))
-    s_blend_extent = int(self.tile_sample_min_size *
-                         self.tile_overlap_factor)
+    s_overlap_size = int(self.tile_latent_min_size * (1 - self.tile_overlap_factor))
+    s_blend_extent = int(self.tile_sample_min_size * self.tile_overlap_factor)
     s_row_limit = self.tile_sample_min_size - s_blend_extent
     # Calculate tile dimensions
     num_t_tiles = (T + t_overlap_size - 1) // t_overlap_size
@@ -690,9 +674,13 @@ def tiled_decode_parallel(
         h_start = h_idx * s_overlap_size
         w_start = w_idx * s_overlap_size
         # Extract and process tile
-        tile = z[:, :, t_start:t_start + self.tile_latent_min_tsize + 1,
-               h_start:h_start + self.tile_latent_min_size,
-               w_start:w_start + self.tile_latent_min_size]
+        tile = z[
+            :,
+            :,
+            t_start : t_start + self.tile_latent_min_tsize + 1,
+            h_start : h_start + self.tile_latent_min_size,
+            w_start : w_start + self.tile_latent_min_size,
+        ]
         # Process tile
         if self.post_quant_conv is not None:
             tile = self.post_quant_conv(tile)
@@ -712,28 +700,22 @@ def tiled_decode_parallel(
 
     results = torch.cat(local_results, dim=0).contiguous()
     # first gather size to pad the results
-    local_size = torch.tensor([results.size(0)],
-                              device=results.device,
-                              dtype=torch.int64)
-    all_sizes = [
-        torch.zeros(1, device=results.device, dtype=torch.int64)
-        for _ in range(world_size)
-    ]
+    local_size = torch.tensor([results.size(0)], device=results.device, dtype=torch.int64)
+    all_sizes = [torch.zeros(1, device=results.device, dtype=torch.int64) for _ in range(world_size)]
     dist.all_gather(all_sizes, local_size)
     max_size = max(size.item() for size in all_sizes)
     padded_results = torch.zeros(max_size, device=results.device)
-    padded_results[:results.size(0)] = results
+    padded_results[: results.size(0)] = results
     # Gather all results
     gathered_dim_metadata = [None] * world_size
-    gathered_results = torch.zeros_like(padded_results).repeat(
-        world_size, *[1] * len(padded_results.shape)
-    ).contiguous()  # use contiguous to make sure it won't copy data in the following operations
+    gathered_results = (
+        torch.zeros_like(padded_results).repeat(world_size, *[1] * len(padded_results.shape)).contiguous()
+    )  # use contiguous to make sure it won't copy data in the following operations
     dist.all_gather_into_tensor(gathered_results, padded_results)
     torch.cuda.set_device(rank)
     dist.all_gather_object(gathered_dim_metadata, local_dim_metadata)
     # Process gathered results
-    data = [[[[] for _ in range(num_w_tiles)] for _ in range(num_h_tiles)]
-            for _ in range(num_t_tiles)]
+    data = [[[[] for _ in range(num_w_tiles)] for _ in range(num_h_tiles)] for _ in range(num_t_tiles)]
     for current_data, global_idx in parallel_data_generator(gathered_results, gathered_dim_metadata):
         t_idx = global_idx // total_spatial_tiles
         spatial_idx = global_idx % total_spatial_tiles
@@ -744,13 +726,12 @@ def tiled_decode_parallel(
     result_slices = []
     last_slice_data = None
     for i, tem_data in enumerate(data):
-        slice_data = merge_spatial_tiles_cog(tem_data, s_blend_extent,
-                                             s_row_limit)
+        slice_data = merge_spatial_tiles_cog(tem_data, s_blend_extent, s_row_limit)
         if i > 0:
             slice_data = blend_t(last_slice_data, slice_data, t_blend_extent)
             result_slices.append(slice_data[:, :, :t_limit, :, :])
         else:
-            result_slices.append(slice_data[:, :, :t_limit + 1, :, :])
+            result_slices.append(slice_data[:, :, : t_limit + 1, :, :])
         last_slice_data = slice_data
     dec = torch.cat(result_slices, dim=2)
     if not return_dict:
@@ -765,7 +746,8 @@ def padded_tensor(tensor, target_shape):
         pad_size = target_shape[dim] - tensor.shape[dim]
         if pad_size < 0:
             raise ValueError(
-                f"Target shape {target_shape} is smaller than tensor shape {tensor.shape} in dimension {dim}.")
+                f"Target shape {target_shape} is smaller than tensor shape {tensor.shape} in dimension {dim}."
+            )
 
         # Ensure padding is split evenly
         pad_left = pad_size // 2
@@ -798,18 +780,18 @@ def depadded_tensor(padded, padding):
 
 
 def tiled_encode_parallel(
-        self,
-        x: torch.Tensor,
-        *,
-        overlap_height: int,
-        overlap_width: int,
-        blend_extent_height: int,
-        blend_extent_width: int,
-        row_limit_height: int,
-        row_limit_width: int,
-        num_tiles_height: int,
-        num_tiles_width: int,
-        use_conv_cache: bool = True,
+    self,
+    x: torch.Tensor,
+    *,
+    overlap_height: int,
+    overlap_width: int,
+    blend_extent_height: int,
+    blend_extent_width: int,
+    row_limit_height: int,
+    row_limit_width: int,
+    num_tiles_height: int,
+    num_tiles_width: int,
+    use_conv_cache: bool = True,
 ) -> torch.Tensor:
     """
     Encode a 5-D video/latent tensor in a memory-friendly, tile-wise fashion
@@ -846,9 +828,7 @@ def tiled_encode_parallel(
     world_size = dist.get_world_size()
 
     # Flatten the 2-D tile grid into a list and shard it across ranks
-    tile_indices = [(i, j)
-                    for i in range(num_tiles_height)
-                    for j in range(num_tiles_width)]
+    tile_indices = [(i, j) for i in range(num_tiles_height) for j in range(num_tiles_width)]
     total_tiles = len(tile_indices)
     tiles_per_rank = total_tiles // world_size
     start_index = rank * tiles_per_rank
@@ -857,8 +837,8 @@ def tiled_encode_parallel(
     # ------------------------------------------------------------------
     # 2) Encode the tiles assigned to this rank
     # ------------------------------------------------------------------
-    decoded_tiles: List[torch.Tensor] = []
-    padding_records: List[torch.Tensor] = []
+    decoded_tiles: list[torch.Tensor] = []
+    padding_records: list[torch.Tensor] = []
 
     for index in range(start_index, end_index):
         i, j = tile_indices[index]
@@ -888,18 +868,12 @@ def tiled_encode_parallel(
     # 3) All-gather paddings and tiles so every rank holds the full batch
     # ------------------------------------------------------------------
     # Gather padding records
-    gathered_pads = [
-        torch.empty_like(torch.cat(padding_records, dim=0))
-        for _ in range(world_size)
-    ]
+    gathered_pads = [torch.empty_like(torch.cat(padding_records, dim=0)) for _ in range(world_size)]
     dist.all_gather(gathered_pads, torch.cat(padding_records, dim=0).contiguous())
     gathered_paddings_tensor = torch.cat(gathered_pads, dim=0)
 
     # Gather decoded tiles
-    gathered_tiles = [
-        torch.empty_like(torch.cat(decoded_tiles, dim=0))
-        for _ in range(world_size)
-    ]
+    gathered_tiles = [torch.empty_like(torch.cat(decoded_tiles, dim=0)) for _ in range(world_size)]
     dist.all_gather(gathered_tiles, torch.cat(decoded_tiles, dim=0).contiguous())
 
     # ------------------------------------------------------------------
@@ -909,9 +883,9 @@ def tiled_encode_parallel(
         num_tiles_height, num_tiles_width, 5, *gathered_paddings_tensor.shape[1:]
     )
 
-    gathered_paddings: List[List[List[Tuple[int, int]]]] = []
+    gathered_paddings: list[list[list[tuple[int, int]]]] = []
     for i in range(num_tiles_height):
-        row: List[List[Tuple[int, int]]] = []
+        row: list[list[tuple[int, int]]] = []
         for j in range(num_tiles_width):
             padding = gathered_paddings1[i, j]
             # `p` is shaped (2,) → convert to Python tuple
@@ -923,25 +897,19 @@ def tiled_encode_parallel(
     # 5) Depad every tile and place them in a 2-D latent grid
     # ------------------------------------------------------------------
     all_tiles = torch.cat(gathered_tiles, dim=0)
-    latent_grid = all_tiles.view(
-        num_tiles_height, num_tiles_width, *all_tiles.shape[1:]
-    )
+    latent_grid = all_tiles.view(num_tiles_height, num_tiles_width, *all_tiles.shape[1:])
 
-    rows: List[List[torch.Tensor]] = [
-        [
-            depadded_tensor(latent_grid[i, j].unsqueeze(0),
-                            gathered_paddings[i][j])
-            for j in range(num_tiles_width)
-        ]
+    rows: list[list[torch.Tensor]] = [
+        [depadded_tensor(latent_grid[i, j].unsqueeze(0), gathered_paddings[i][j]) for j in range(num_tiles_width)]
         for i in range(num_tiles_height)
     ]
 
     # ------------------------------------------------------------------
     # 6) Blend overlaps to avoid seams
     # ------------------------------------------------------------------
-    blended_rows: List[torch.Tensor] = []
+    blended_rows: list[torch.Tensor] = []
     for i, row in enumerate(rows):
-        blended_row: List[torch.Tensor] = []
+        blended_row: list[torch.Tensor] = []
         for j, tile in enumerate(row):
             # Blend with tile above / left whenever those exist
             if i > 0:
@@ -965,9 +933,9 @@ def tiled_encode_parallel(
 
 
 def merge_spatial_tiles_blend(
-        spatial_rows: List[List[torch.Tensor]],
-        h_blend_extent: int,
-        w_blend_extent: int,
+    spatial_rows: list[list[torch.Tensor]],
+    h_blend_extent: int,
+    w_blend_extent: int,
 ):
     n_rows = len(spatial_rows)
     result_rows = []
@@ -1005,15 +973,15 @@ def merge_spatial_tiles_blend(
             left_crop = w_blend_extent // 2 if j == 0 else 0
             right_crop = w_blend_extent // 2 if j == n_cols - 1 else w_blend_extent
 
-            result_row.append(tile[..., top_crop: -bottom_crop, left_crop: -right_crop])
+            result_row.append(tile[..., top_crop:-bottom_crop, left_crop:-right_crop])
 
         result_rows.append(torch.cat(result_row, dim=-1))
     return torch.cat(result_rows, dim=-2)
 
 
 def merge_spatial_tiles(
-        spatial_rows: List[List[torch.Tensor]],
-        sample_pad_size: int,
+    spatial_rows: list[list[torch.Tensor]],
+    sample_pad_size: int,
 ):
     result_rows = []
     for i, row in enumerate(spatial_rows):

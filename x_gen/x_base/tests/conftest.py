@@ -1,14 +1,15 @@
 """
 Pytest configuration and fixtures for x_base unit tests.
 """
-import pytest
-import sys
-from unittest.mock import MagicMock, patch
-from argparse import Namespace
-
 
 # 添加项目根目录到路径
 import pathlib
+import sys
+from argparse import Namespace
+from unittest.mock import MagicMock
+
+import pytest
+
 _root_dir = pathlib.Path(__file__).parent.parent
 sys.path.insert(0, str(_root_dir))
 
@@ -18,15 +19,9 @@ sys.path.insert(0, str(_root_dir))
 # ============================================================
 def pytest_configure(config):
     """Register custom markers."""
-    config.addinivalue_line(
-        "markers", "requires_torch: mark test as requiring torch"
-    )
-    config.addinivalue_line(
-        "markers", "requires_diffusers: mark test as requiring diffusers"
-    )
-    config.addinivalue_line(
-        "markers", "integration: mark test as integration test"
-    )
+    config.addinivalue_line("markers", "requires_torch: mark test as requiring torch")
+    config.addinivalue_line("markers", "requires_diffusers: mark test as requiring diffusers")
+    config.addinivalue_line("markers", "integration: mark test as integration test")
 
 
 # ============================================================
@@ -36,9 +31,11 @@ def _create_mock_diffusion_pipeline_class():
     """Create a mock class that inherits from DiffusionPipeline."""
     try:
         from diffusers import DiffusionPipeline
+
         class MockDiffusionPipeline(DiffusionPipeline):
             def __init__(self, *args, **kwargs):
                 pass
+
         return MockDiffusionPipeline
     except ImportError:
         return MagicMock

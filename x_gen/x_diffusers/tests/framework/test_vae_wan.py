@@ -12,10 +12,10 @@ Note: These tests verify standalone logic without importing the actual module.
 No sys.modules mocking is needed as we test mathematical operations and shapes.
 """
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-import numpy as np
 
 
 class TestVfiFunction:
@@ -24,17 +24,17 @@ class TestVfiFunction:
     def test_vfi_multiplier_calculation(self):
         """Test frame interpolation multiplier calculation."""
         fps = 24
-        base_fps = 16
+        base_fps = 16  # noqa: F841
 
         if fps % 16 == 0:
             multiplier = fps // 16
             is_skip = False
         else:
             multiplier = fps // 16 + 1
-            is_skip = True if fps % 8 < 4 else False
+            is_skip = True if fps % 8 < 4 else False  # noqa: SIM210
 
         assert multiplier == 2
-        assert is_skip == True  # 24 % 8 = 0 < 4, so is_skip is True
+        assert is_skip == True  # 24 % 8 = 0 < 4, so is_skip is True  # noqa: E712
 
     def test_vfi_multiplier_exact_16(self):
         """Test multiplier for fps divisible by 16."""
@@ -45,7 +45,7 @@ class TestVfiFunction:
             is_skip = False
 
         assert multiplier == 2
-        assert is_skip == False
+        assert is_skip == False  # noqa: E712
 
     def test_vfi_is_skip_calculation(self):
         """Test is_skip flag calculation."""
@@ -57,7 +57,7 @@ class TestVfiFunction:
         else:
             is_skip = False
 
-        assert is_skip == False
+        assert is_skip == False  # noqa: E712
 
 
 class TestDecodeAscend:
@@ -67,6 +67,7 @@ class TestDecodeAscend:
         """Test post quant conv application."""
         try:
             from x_diffusers.framework.vae.wan import decode_ascend
+
             assert decode_ascend is not None
         except ImportError:
             pytest.skip("decode_ascend not available")
@@ -84,11 +85,11 @@ class TestDecodeAscend:
         num_frames = 5
 
         for i in range(num_frames):
-            first_chunk = True if i == 0 else False
+            first_chunk = True if i == 0 else False  # noqa: SIM210
             if i == 0:
-                assert first_chunk == True
+                assert first_chunk == True  # noqa: E712
             else:
-                assert first_chunk == False
+                assert first_chunk == False  # noqa: E712
 
     def test_output_collection(self):
         """Test output collection."""
@@ -180,16 +181,16 @@ class TestAscendWanResample:
 
     def test_init_upsample2d(self):
         """Test initialization with upsample2d mode."""
-        dim = 64
+        dim = 64  # noqa: F841
         mode = "upsample2d"
-        upsample_out_dim = 32
+        upsample_out_dim = 32  # noqa: F841
 
         assert mode == "upsample2d"
         # Would create WanUpsample + Conv2d
 
     def test_init_upsample3d(self):
         """Test initialization with upsample3d mode."""
-        dim = 64
+        dim = 64  # noqa: F841
         mode = "upsample3d"
 
         assert mode == "upsample3d"
@@ -197,7 +198,7 @@ class TestAscendWanResample:
 
     def test_init_downsample2d(self):
         """Test initialization with downsample2d mode."""
-        dim = 64
+        dim = 64  # noqa: F841
         mode = "downsample2d"
 
         assert mode == "downsample2d"
@@ -205,7 +206,7 @@ class TestAscendWanResample:
 
     def test_init_downsample3d(self):
         """Test initialization with downsample3d mode."""
-        dim = 64
+        dim = 64  # noqa: F841
         mode = "downsample3d"
 
         assert mode == "downsample3d"
@@ -213,7 +214,7 @@ class TestAscendWanResample:
 
     def test_init_none_mode(self):
         """Test initialization with none mode (identity)."""
-        dim = 64
+        dim = 64  # noqa: F841
         mode = "none"
 
         if mode not in ["upsample2d", "upsample3d", "downsample2d", "downsample3d"]:
@@ -232,7 +233,7 @@ class TestAscendWanResample:
         assert x.shape == (b * t, c, h, w)
 
         # Simulate 2x upsample: (h*2, w*2)
-        h_up, w_up = h * 2, w * 2  # 120, 208
+        h_up, w_up = h * 2, w * 2  # 120, 208  # noqa: F841
         x = x.view(b * t, c, h, w)  # Keep original shape for test
 
         # After 2D upsample operation, reshape back
@@ -252,7 +253,7 @@ class TestFeatureCache:
         feat_idx = [0]
 
         if feat_cache is not None:
-            idx = feat_idx[0]
+            idx = feat_idx[0]  # noqa: F841
             feat_idx[0] += 1
 
         assert feat_idx[0] == 0  # Not incremented
@@ -277,5 +278,6 @@ class TestModelType:
     def test_model_type(self):
         """Test MODEL_TYPE constant."""
         import pathlib
+
         MODEL_TYPE = pathlib.Path("wan").name
         assert MODEL_TYPE == "wan"

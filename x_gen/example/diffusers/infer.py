@@ -1,4 +1,4 @@
-from x_diffusers import init_env, InferenceManager, parse_args
+from x_diffusers import InferenceManager, init_env, parse_args
 
 if __name__ == "__main__":
     args = parse_args()

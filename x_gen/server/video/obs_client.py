@@ -1,9 +1,10 @@
+import logging
 import os
 import time
-import subprocess
 from pathlib import Path
+
 from obs import ObsClient
-import logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -11,22 +12,31 @@ BASE_DIR = Path(__file__).resolve().parent
 scc_path = Path(BASE_DIR) / "scc.conf"
 SC_PASSWORD_FILE = "/scc/"
 
+
 def get_single_file(dir_path):
     files = os.listdir(dir_path)
 
     filename = files[0]
     filepath = os.path.join(dir_path, filename)
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, encoding="utf-8") as f:
         content = f.read()
     return filename, content
+
 
 ak_name = None
 sk_password = None
 if os.environ.get("OBS_BUCKET_NAME"):
     ak_name, sk_password = get_single_file(SC_PASSWORD_FILE)
 
+
 class ObsStorageClient:
-    def __init__(self, ak: str = ak_name, sk: str = sk_password, endpoint: str = os.environ.get("OBS_URL_PREFIX"), bucket: str = os.environ.get("OBS_BUCKET_NAME")):
+    def __init__(
+        self,
+        ak: str = ak_name,
+        sk: str = sk_password,
+        endpoint: str = os.environ.get("OBS_URL_PREFIX"),
+        bucket: str = os.environ.get("OBS_BUCKET_NAME"),
+    ):
         """
         通用存储客户端
         :param ak: Access Key
@@ -37,11 +47,7 @@ class ObsStorageClient:
         self.bucket = bucket
         print(f"ObsStorageClient 【endpoint】：{endpoint}")
         print(f"ObsStorageClient 【bucket】：{bucket}")
-        self.client = ObsClient(
-                access_key_id=ak,
-                secret_access_key=sk,
-                server=endpoint
-            )
+        self.client = ObsClient(access_key_id=ak, secret_access_key=sk, server=endpoint)
 
     def generate_url(self, filename: str, expire_seconds: int = os.environ.get("OBS_URL_EXPIRE_SECONDS")) -> str:
         """
@@ -53,18 +59,15 @@ class ObsStorageClient:
         logger.info("start generate_url")
         file_path = os.path.join(os.environ.get("OBS_STORAGE_PATH"), filename)
         signed_url = self.client.createSignedUrl(
-                method="GET",
-                bucketName=self.bucket,
-                objectKey=file_path,
-                expires=expire_seconds
-            )
+            method="GET", bucketName=self.bucket, objectKey=file_path, expires=expire_seconds
+        )
         logger.info("finish generate_url")
         return signed_url["signedUrl"]
 
     def wait_object_ready(self, file_path, timeout=10):
-        '''
+        """
         等待对象存储文件可访问(需保证容器内可访问外网)
-        '''
+        """
         start = time.time()
         while time.time() - start < timeout:
             try:
@@ -72,7 +75,7 @@ class ObsStorageClient:
                 if resp.status < 300:
                     return True
             except Exception as e:
-                logger.warning(f"获取对象元数据失败: {e}, 继续等待...")
+                logger.warning(f"获取对象元数据失败: {e}, 继续等待...")  # noqa: G004
                 pass  # 捕获异常后继续循环
             time.sleep(0.3)
         logger.warning("等待对象存储文件可访问超时")

@@ -1,4 +1,3 @@
-import os
 from diffusers import DiffusionPipeline
 from torch.npu import Stream
 
@@ -21,7 +20,8 @@ def check_split_num_correctness(attn, split_num):
     world_size = attn.parallel_manager.sp_size
     if split_num is not None and (attn.heads / world_size) % split_num != 0 and not attn.parallel_manager.enable_usp:
         raise ValueError(
-            f"Number of per-device attn heads {attn.heads / world_size} must be divisible by PHAA split num {split_num}")
+            f"Number of per-device attn heads {attn.heads / world_size} must be divisible by PHAA split num {split_num}"
+        )
 
 
 def inject_phaa_for_wan(transformer, split_num):

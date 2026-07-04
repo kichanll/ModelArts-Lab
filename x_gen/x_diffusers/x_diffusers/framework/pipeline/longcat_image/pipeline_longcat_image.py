@@ -8,20 +8,17 @@ from typing import Any
 
 import torch
 import torch.distributed as dist
-
 from diffusers import LongCatImagePipeline
 from diffusers.utils import logging
 
-from .base_longcat_image import BaseLongCatImagePipelineMixin
 from ..registry import register_hf_pipeline_class
+from .base_longcat_image import BaseLongCatImagePipelineMixin
 
 logger = logging.get_logger(__name__)
 
 
 @register_hf_pipeline_class("LongCatImagePipeline")
-class LongCatImagePipeline(
-    BaseLongCatImagePipelineMixin, LongCatImagePipeline
-):
+class LongCatImagePipeline(BaseLongCatImagePipelineMixin, LongCatImagePipeline):
     """LongCatImage Pipeline 扩展类
 
     继承自 LongCatImagePipeline，混入 BaseLongCatImagePipelineMixin
@@ -57,7 +54,9 @@ class LongCatImagePipeline(
 
         # ========== 2. 输入校验 ==========
         self.check_inputs(
-            prompt, height, width,
+            prompt,
+            height,
+            width,
             negative_prompt=negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
@@ -81,7 +80,7 @@ class LongCatImagePipeline(
         # ========== 5. Prompt rewrite ==========
         if enable_prompt_rewrite:
             prompt = self.rewire_prompt(prompt, device)
-            logger.info(f"Rewrite prompt {prompt}!")
+            logger.info(f"Rewrite prompt {prompt}!")  # noqa: G004
 
         negative_prompt = "" if negative_prompt is None else negative_prompt
 
@@ -124,9 +123,12 @@ class LongCatImagePipeline(
         latents, latent_image_ids = self.prepare_latents(
             batch_size * num_images_per_prompt,
             16,  # num_channels_latents
-            height, width,
+            height,
+            width,
             prompt_embeds.dtype,
-            device, generator, latents,
+            device,
+            generator,
+            latents,
         )
 
         # ========== 8. 准备 timesteps ==========

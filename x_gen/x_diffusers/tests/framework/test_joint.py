@@ -10,9 +10,10 @@ No sys.modules mocking is needed as we test mathematical operations and shapes.
 """
 
 import math
+from unittest.mock import MagicMock
+
 import pytest
 import torch
-from unittest.mock import MagicMock
 
 
 class TestWanImageToVideoPipelineJointInit:
@@ -57,7 +58,7 @@ class TestCalcFrames:
         mock_instance.vae_scale_factor_temporal = 4
         mock_instance.vae.config = MagicMock()
 
-        num_frames = 81  # 81 - 1 = 80, divisible by 4
+        num_frames = 81  # 81 - 1 = 80, divisible by 4  # noqa: F841
         result = 81 // 4 * 4 + 1  # = 81
         assert result == 81
 
@@ -82,7 +83,7 @@ class TestCalcBs:
     def test_calc_bs_single_string(self):
         """Test batch size for single string prompt."""
         prompt = "test prompt"
-        prompt_embeds = None
+        prompt_embeds = None  # noqa: F841
 
         if isinstance(prompt, str):
             batch_size = 1
@@ -100,7 +101,7 @@ class TestCalcBs:
 
     def test_calc_bs_none_uses_embeds(self):
         """Test batch size from prompt_embeds when prompt is None."""
-        prompt = None
+        prompt = None  # noqa: F841
         prompt_embeds = MagicMock()
         prompt_embeds.shape = [4, 10, 512]  # batch_size=4
 
@@ -265,4 +266,4 @@ class TestClassifierFreeGuidance:
         guidance_scale = 1.0
         do_classifier_free_guidance = guidance_scale > 1
 
-        assert do_classifier_free_guidance == False
+        assert do_classifier_free_guidance == False  # noqa: E712

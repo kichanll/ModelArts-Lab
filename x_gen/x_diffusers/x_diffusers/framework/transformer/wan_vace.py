@@ -1,12 +1,10 @@
 import math
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import torch
 import torch.nn as nn
-
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.loaders import FromOriginalModelMixin, PeftAdapterMixin
-from diffusers.utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers, logging
 from diffusers.models.attention import FeedForward
 from diffusers.models.attention_processor import Attention
 from diffusers.models.cache_utils import CacheMixin
@@ -14,26 +12,31 @@ from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.normalization import FP32LayerNorm
 from diffusers.models.transformers import transformer_wan_vace
-
+from diffusers.utils import USE_PEFT_BACKEND, logging, scale_lora_layers, unscale_lora_layers
 from x_base import ParallelManager, gather_sequence, get_pad, set_pad, split_sequence
-from .wan import AscendWanRotaryPosEmbed, AscendWanTransformerBlock, AscendWanAttnProcessor2_0, \
-    AscendWanTimeTextImageEmbedding
+
+from .wan import (
+    AscendWanAttnProcessor2_0,
+    AscendWanRotaryPosEmbed,
+    AscendWanTimeTextImageEmbedding,
+    AscendWanTransformerBlock,
+)
 
 logger = logging.get_logger(__name__)
 
 
 class AscendWanVACETransformerBlock(nn.Module):
     def __init__(
-            self,
-            dim: int,
-            ffn_dim: int,
-            num_heads: int,
-            qk_norm: str = "rms_norm_across_heads",
-            cross_attn_norm: bool = False,
-            eps: float = 1e-6,
-            added_kv_proj_dim: Optional[int] = None,
-            apply_input_projection: bool = False,
-            apply_output_projection: bool = False,
+        self,
+        dim: int,
+        ffn_dim: int,
+        num_heads: int,
+        qk_norm: str = "rms_norm_across_heads",
+        cross_attn_norm: bool = False,
+        eps: float = 1e-6,
+        added_kv_proj_dim: int | None = None,
+        apply_input_projection: bool = False,
+        apply_output_projection: bool = False,
     ):
         super().__init__()
 
@@ -85,22 +88,22 @@ class AscendWanVACETransformerBlock(nn.Module):
         if apply_output_projection:
             self.proj_out = nn.Linear(dim, dim)
 
-        self.scale_shift_table = nn.Parameter(torch.randn(1, 6, dim) / dim ** 0.5)
+        self.scale_shift_table = nn.Parameter(torch.randn(1, 6, dim) / dim**0.5)
 
     def forward(
-            self,
-            hidden_states: torch.Tensor,
-            encoder_hidden_states: torch.Tensor,
-            control_hidden_states: torch.Tensor,
-            temb: torch.Tensor,
-            rotary_emb: torch.Tensor,
+        self,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: torch.Tensor,
+        control_hidden_states: torch.Tensor,
+        temb: torch.Tensor,
+        rotary_emb: torch.Tensor,
     ) -> torch.Tensor:
         if self.proj_in is not None:
             control_hidden_states = self.proj_in(control_hidden_states)
             control_hidden_states = control_hidden_states + hidden_states
 
         shift_msa, scale_msa, gate_msa, c_shift_msa, c_scale_msa, c_gate_msa = (
-                self.scale_shift_table + temb.float()
+            self.scale_shift_table + temb.float()
         ).chunk(6, dim=1)
 
         # 1. Self-attention
@@ -176,25 +179,25 @@ class AscendWanVACETransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin,
 
     @register_to_config
     def __init__(
-            self,
-            patch_size: Tuple[int] = (1, 2, 2),
-            num_attention_heads: int = 40,
-            attention_head_dim: int = 128,
-            in_channels: int = 16,
-            out_channels: int = 16,
-            text_dim: int = 4096,
-            freq_dim: int = 256,
-            ffn_dim: int = 13824,
-            num_layers: int = 40,
-            cross_attn_norm: bool = True,
-            qk_norm: Optional[str] = "rms_norm_across_heads",
-            eps: float = 1e-6,
-            image_dim: Optional[int] = None,
-            added_kv_proj_dim: Optional[int] = None,
-            rope_max_seq_len: int = 1024,
-            pos_embed_seq_len: Optional[int] = None,
-            vace_layers: List[int] = None,
-            vace_in_channels: int = 96,
+        self,
+        patch_size: tuple[int] = (1, 2, 2),
+        num_attention_heads: int = 40,
+        attention_head_dim: int = 128,
+        in_channels: int = 16,
+        out_channels: int = 16,
+        text_dim: int = 4096,
+        freq_dim: int = 256,
+        ffn_dim: int = 13824,
+        num_layers: int = 40,
+        cross_attn_norm: bool = True,
+        qk_norm: str | None = "rms_norm_across_heads",
+        eps: float = 1e-6,
+        image_dim: int | None = None,
+        added_kv_proj_dim: int | None = None,
+        rope_max_seq_len: int = 1024,
+        pos_embed_seq_len: int | None = None,
+        vace_layers: list[int] = None,
+        vace_in_channels: int = 96,
     ) -> None:
         super().__init__()
 
@@ -253,7 +256,7 @@ class AscendWanVACETransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin,
         # 4. Output norm & projection
         self.norm_out = FP32LayerNorm(inner_dim, eps, elementwise_affine=False)
         self.proj_out = nn.Linear(inner_dim, out_channels * math.prod(patch_size))
-        self.scale_shift_table = nn.Parameter(torch.randn(1, 2, inner_dim) / inner_dim ** 0.5)
+        self.scale_shift_table = nn.Parameter(torch.randn(1, 2, inner_dim) / inner_dim**0.5)
 
         self.gradient_checkpointing = False
 
@@ -274,16 +277,16 @@ class AscendWanVACETransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin,
                 module.parallel_manager = self.parallel_manager
 
     def forward(
-            self,
-            hidden_states: torch.Tensor,
-            timestep: torch.LongTensor,
-            encoder_hidden_states: torch.Tensor,
-            encoder_hidden_states_image: Optional[torch.Tensor] = None,
-            control_hidden_states: torch.Tensor = None,
-            control_hidden_states_scale: torch.Tensor = None,
-            return_dict: bool = True,
-            attention_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Union[torch.Tensor, Dict[str, torch.Tensor]]:
+        self,
+        hidden_states: torch.Tensor,
+        timestep: torch.LongTensor,
+        encoder_hidden_states: torch.Tensor,
+        encoder_hidden_states_image: torch.Tensor | None = None,
+        control_hidden_states: torch.Tensor = None,
+        control_hidden_states_scale: torch.Tensor = None,
+        return_dict: bool = True,
+        attention_kwargs: dict[str, Any] | None = None,
+    ) -> torch.Tensor | dict[str, torch.Tensor]:
         if attention_kwargs is not None:
             attention_kwargs = attention_kwargs.copy()
             lora_scale = attention_kwargs.pop("scale", 1.0)
@@ -295,9 +298,7 @@ class AscendWanVACETransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin,
             scale_lora_layers(self, lora_scale)
         else:
             if attention_kwargs is not None and attention_kwargs.get("scale", None) is not None:
-                logger.warning(
-                    "Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
-                )
+                logger.warning("Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective.")
 
         batch_size, num_channels, num_frames, height, width = hidden_states.shape
         p_t, p_h, p_w = self.config.patch_size
@@ -341,16 +342,23 @@ class AscendWanVACETransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin,
         if self.parallel_manager is not None and self.parallel_manager.sp_size > 1:
             set_pad("pad", hidden_states.shape[1], self.parallel_manager.sp_group)
             hidden_states = split_sequence(hidden_states, self.parallel_manager.sp_group, dim=1, pad=get_pad("pad"))
-            control_hidden_states = split_sequence(control_hidden_states, self.parallel_manager.sp_group, dim=1,
-                                                   pad=get_pad("pad"))
+            control_hidden_states = split_sequence(
+                control_hidden_states, self.parallel_manager.sp_group, dim=1, pad=get_pad("pad")
+            )
 
         # 5. Transformer blocks
-        control_hidden_states_list = self._prepare_vace_hints(control_hidden_states, hidden_states,
-                                                              encoder_hidden_states, timestep_proj, rotary_emb,
-                                                              control_hidden_states_scale)
+        control_hidden_states_list = self._prepare_vace_hints(
+            control_hidden_states,
+            hidden_states,
+            encoder_hidden_states,
+            timestep_proj,
+            rotary_emb,
+            control_hidden_states_scale,
+        )
         for i, block in enumerate(self.blocks):
-            hidden_states, encoder_hidden_states = self._process_block(block, hidden_states, encoder_hidden_states,
-                                                                       timestep_proj, rotary_emb)
+            hidden_states, encoder_hidden_states = self._process_block(
+                block, hidden_states, encoder_hidden_states, timestep_proj, rotary_emb
+            )
             if i in self.config.vace_layers:
                 control_hint, scale = control_hidden_states_list.pop()
                 hidden_states = hidden_states + control_hint * scale
@@ -386,30 +394,38 @@ class AscendWanVACETransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin,
 
         return Transformer2DModelOutput(sample=output)
 
-    def _prepare_vace_hints(self, control_hidden_states, hidden_states, encoder_hidden_states, timestep_proj,
-                            rotary_emb,
-                            control_hidden_states_scale):
+    def _prepare_vace_hints(
+        self,
+        control_hidden_states,
+        hidden_states,
+        encoder_hidden_states,
+        timestep_proj,
+        rotary_emb,
+        control_hidden_states_scale,
+    ):
         control_hidden_states_list = []
         for i, block in enumerate(self.vace_blocks):
-            conditioning_states, control_hidden_states = self._process_vace_block(block, hidden_states,
-                                                                                  encoder_hidden_states,
-                                                                                  control_hidden_states, timestep_proj,
-                                                                                  rotary_emb)
+            conditioning_states, control_hidden_states = self._process_vace_block(
+                block, hidden_states, encoder_hidden_states, control_hidden_states, timestep_proj, rotary_emb
+            )
             control_hidden_states_list.append((conditioning_states, control_hidden_states_scale[i]))
         return control_hidden_states_list[::-1]
 
-    def _process_vace_block(self, block, hidden_states, encoder_hidden_states, control_hidden_states, timestep_proj,
-                            rotary_emb):
+    def _process_vace_block(
+        self, block, hidden_states, encoder_hidden_states, control_hidden_states, timestep_proj, rotary_emb
+    ):
         if torch.is_grad_enabled() and self.gradient_checkpointing:
-            return self._gradient_checkpointing_func(block, hidden_states, encoder_hidden_states, control_hidden_states,
-                                                     timestep_proj, rotary_emb)
+            return self._gradient_checkpointing_func(
+                block, hidden_states, encoder_hidden_states, control_hidden_states, timestep_proj, rotary_emb
+            )
         else:
             return block(hidden_states, encoder_hidden_states, control_hidden_states, timestep_proj, rotary_emb)
 
     def _process_block(self, block, hidden_states, encoder_hidden_states, timestep_proj, rotary_emb):
         if torch.is_grad_enabled() and self.gradient_checkpointing:
-            return self._gradient_checkpointing_func(block, hidden_states, encoder_hidden_states, timestep_proj,
-                                                     rotary_emb)
+            return self._gradient_checkpointing_func(
+                block, hidden_states, encoder_hidden_states, timestep_proj, rotary_emb
+            )
         else:
             return block(hidden_states, encoder_hidden_states, timestep_proj, rotary_emb)
 

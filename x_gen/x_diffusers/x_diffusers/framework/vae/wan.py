@@ -1,39 +1,46 @@
-from typing import Union, List, Optional, Tuple
-
-import numpy as np
-import torch
-import torch.nn as nn
-import PIL
-from diffusers.models.autoencoders import autoencoder_kl_wan
-from diffusers.models.autoencoders.autoencoder_kl_wan import WanUpsample, WanCausalConv3d, CACHE_T, AutoencoderKLWan, \
-    DecoderOutput, unpatchify, AutoencoderKLOutput, DiagonalGaussianDistribution
-from diffusers.video_processor import VideoProcessor
-from x_base.utils.infer_info import infer_info
-from x_base.vae_parallelism.vae_mgr import VAEManager
-from x_base.vae_parallelism.utils import enable_lightning, add_lightning_init
-
-from .vfi_utils import generic_frame_loop, InterpolationStateList
-from .IFRNet_S_arch import IRFNet_S
 import pathlib
-import typing
 import time
-import torch.distributed as dist
+import typing
 from functools import wraps
 from pathlib import Path
+
+import numpy as np
+import PIL
+import torch
+import torch.distributed as dist
+import torch.nn as nn
+from diffusers.models.autoencoders import autoencoder_kl_wan
+from diffusers.models.autoencoders.autoencoder_kl_wan import (
+    CACHE_T,
+    AutoencoderKLOutput,
+    AutoencoderKLWan,
+    DecoderOutput,
+    DiagonalGaussianDistribution,
+    WanCausalConv3d,
+    WanUpsample,
+    unpatchify,
+)
+from diffusers.video_processor import VideoProcessor
+from x_base.utils.infer_info import infer_info
+from x_base.vae_parallelism.utils import add_lightning_init, enable_lightning
+from x_base.vae_parallelism.vae_mgr import VAEManager
+
+from .IFRNet_S_arch import IRFNet_S
+from .vfi_utils import InterpolationStateList, generic_frame_loop
 
 MODEL_TYPE = pathlib.Path(__file__).parent.name
 
 
 def vfi(
-        frames: torch.Tensor,
-        device,
-        interpolation_model,
-        batch_size=2,
-        clear_cache_after_n_frames: typing.SupportsInt = 80,
-        multiplier: typing.SupportsInt = 2,
-        is_skip=False,
-        scale_factor: typing.SupportsFloat = 1.0,
-        optional_interpolation_states: InterpolationStateList = None,
+    frames: torch.Tensor,
+    device,
+    interpolation_model,
+    batch_size=2,
+    clear_cache_after_n_frames: typing.SupportsInt = 80,
+    multiplier: typing.SupportsInt = 2,
+    is_skip=False,
+    scale_factor: typing.SupportsFloat = 1.0,
+    optional_interpolation_states: InterpolationStateList = None,
 ):
     interpolation_model.eval().to(device)
     interpolation_model.to(torch.float16)
@@ -43,9 +50,18 @@ def vfi(
         return model(frame_0, frame_1, timestep, scale_factor)
 
     args = [interpolation_model, scale_factor]
-    out = generic_frame_loop(frames, batch_size, device, clear_cache_after_n_frames, multiplier,
-                             return_middle_frame, *args, interpolation_states=optional_interpolation_states,
-                             dtype=torch.float16, is_skip=is_skip)
+    out = generic_frame_loop(
+        frames,
+        batch_size,
+        device,
+        clear_cache_after_n_frames,
+        multiplier,
+        return_middle_frame,
+        *args,
+        interpolation_states=optional_interpolation_states,
+        dtype=torch.float16,
+        is_skip=is_skip,
+    )
     return out
 
 
@@ -105,7 +121,7 @@ def _init_frame_interpolation():
         is_skip = False
     else:
         multiplier = infer_info.fps // 16 + 1
-        is_skip = (infer_info.fps % 8 < 4)
+        is_skip = infer_info.fps % 8 < 4
 
     return interpolation_model, multiplier, is_skip
 
@@ -116,18 +132,21 @@ def _apply_frame_interpolation(out_, first_frame, i, skip, is_skip, multiplier, 
         first_frame = out_
     elif not is_skip or (is_skip and skip % 2 == 0):
         input_ = torch.cat([first_frame, out_], dim=2).transpose(1, 2).squeeze(0)
-        out_ = vfi(
-            input_, input_.device, interp_model, input_.shape[0] - 1, multiplier=multiplier
-        )[1:].transpose(0, 1).unsqueeze(0).contiguous()
+        out_ = (
+            vfi(input_, input_.device, interp_model, input_.shape[0] - 1, multiplier=multiplier)[1:]
+            .transpose(0, 1)
+            .unsqueeze(0)
+            .contiguous()
+        )
 
     first_frame = out_[:, :, -1:, :, :]
     return out_, first_frame
 
 
-def _decode_ascend(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+def _decode_ascend(self, z: torch.Tensor, return_dict: bool = True) -> DecoderOutput | torch.Tensor:
     # 直接调用普通函数，不要加 self.
     interp_model, multiplier, is_skip = _init_frame_interpolation()
-    use_interp = (interp_model is not None)
+    use_interp = interp_model is not None
 
     self.clear_cache()
     num_frame = z.shape[2]
@@ -154,10 +173,7 @@ def _decode_ascend(self, z: torch.Tensor, return_dict: bool = True) -> Union[Dec
     for i in range(num_frame):
         self._conv_idx = [0]
         out_ = self.decoder(
-            tile[:, :, i: i + 1, :, :],
-            feat_cache=self._feat_map,
-            feat_idx=self._conv_idx,
-            first_chunk=(i == 0)
+            tile[:, :, i : i + 1, :, :], feat_cache=self._feat_map, feat_idx=self._conv_idx, first_chunk=(i == 0)
         )
 
         # 直接调用普通函数
@@ -165,7 +181,7 @@ def _decode_ascend(self, z: torch.Tensor, return_dict: bool = True) -> Union[Dec
             out_, first_frame = _apply_frame_interpolation(
                 out_, first_frame, i, skip, is_skip, multiplier, interp_model
             )
-        skip += 1
+        skip += 1  # noqa: SIM113
 
         if is_lightning_mode:
             out_ = vae_manager.align_out(out_)
@@ -194,7 +210,7 @@ def _decode_ascend(self, z: torch.Tensor, return_dict: bool = True) -> Union[Dec
 
 
 @time_count(warmup=2, repeat=5)
-def decode_ascend(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+def decode_ascend(self, z: torch.Tensor, return_dict: bool = True) -> DecoderOutput | torch.Tensor:
     decoded = self._decode_ascend(z).sample
     if not return_dict:
         return (decoded,)
@@ -225,7 +241,7 @@ def _encode_ascend(self, x: torch.Tensor):
             out = self.encoder(tile[:, :, :1, :, :], feat_cache=self._enc_feat_map, feat_idx=self._enc_conv_idx)
         else:
             out_ = self.encoder(
-                tile[:, :, 1 + 4 * (i - 1): 1 + 4 * i, :, :],
+                tile[:, :, 1 + 4 * (i - 1) : 1 + 4 * i, :, :],
                 feat_cache=self._enc_feat_map,
                 feat_idx=self._enc_conv_idx,
             )
@@ -241,8 +257,8 @@ def _encode_ascend(self, x: torch.Tensor):
 
 @time_count(warmup=2, repeat=5)
 def encode_ascend(
-        self, x: torch.Tensor, return_dict: bool = True
-) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
+    self, x: torch.Tensor, return_dict: bool = True
+) -> AutoencoderKLOutput | tuple[DiagonalGaussianDistribution]:
     h = self._encode_ascend(x)
 
     if infer_info.vae_output_dir and dist.get_rank() == 0:
@@ -259,8 +275,8 @@ def encode_ascend(
 
 
 def postprocess_video_ascend(
-        self, video: torch.Tensor, output_type: str = "np"
-) -> Union[np.ndarray, torch.Tensor, List[PIL.Image.Image]]:
+    self, video: torch.Tensor, output_type: str = "np"
+) -> np.ndarray | torch.Tensor | list[PIL.Image.Image]:
     r"""
     Converts a video tensor to a list of frames for export.
 
@@ -281,7 +297,7 @@ def postprocess_video_ascend(
         outputs = np.stack(outputs)
     elif output_type == "pt":
         outputs = torch.stack(outputs)
-    elif not output_type == "pil":
+    elif output_type != "pil":
         raise ValueError(f"{output_type} does not exist. Please choose one of ['np', 'pt', 'pil']")
 
     return outputs
@@ -341,7 +357,6 @@ class AscendWanResample(nn.Module):
         self._init_module = False
 
     def forward(self, x, feat_cache=None, feat_idx=None):
-
         if self._init_module:
             self._init_module_test()
 

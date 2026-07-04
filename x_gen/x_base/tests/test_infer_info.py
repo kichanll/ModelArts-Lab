@@ -3,21 +3,21 @@ Unit tests for InferInfo class.
 
 Tests the InferInfo class that manages inference configuration.
 """
-import pytest
-from unittest.mock import MagicMock
+
 from argparse import Namespace
 
+import pytest
 
 # ============================================================
 # Test data constants
 # ============================================================
 HUNYUAN_FRAME_ADJUSTMENT_CASES = [
-    (1, 1),      # minimum frames
-    (5, 5),      # already satisfies 4*k+1
-    (9, 9),      # already satisfies 4*k+1
-    (10, 9),     # should adjust down to 9
-    (50, 49),    # should adjust to 49
-    (100, 97),   # should adjust to 97
+    (1, 1),  # minimum frames
+    (5, 5),  # already satisfies 4*k+1
+    (9, 9),  # already satisfies 4*k+1
+    (10, 9),  # should adjust down to 9
+    (50, 49),  # should adjust to 49
+    (100, 97),  # should adjust to 97
     (121, 121),  # already satisfies 4*k+1
     (200, 197),  # should adjust to 197
 ]
@@ -189,8 +189,8 @@ class TestInferInfo:
         from x_base.utils.infer_info import infer_info
 
         assert infer_info is not None
-        assert hasattr(infer_info, 'model')
-        assert hasattr(infer_info, 'task_type')
+        assert hasattr(infer_info, "model")
+        assert hasattr(infer_info, "task_type")
 
 
 class TestInferInfoEdgeCases:
@@ -217,12 +217,15 @@ class TestInferInfoEdgeCases:
         with pytest.raises(AttributeError):
             info.update_info(args)
 
-    @pytest.mark.parametrize("save_path", [
-        "/path/with spaces/output.mp4",
-        "/path/with/中文/output.mp4",
-        "C:\\Windows\\path\\output.mp4",
-        "./output (1).mp4",
-    ])
+    @pytest.mark.parametrize(
+        "save_path",
+        [
+            "/path/with spaces/output.mp4",
+            "/path/with/中文/output.mp4",
+            "C:\\Windows\\path\\output.mp4",
+            "./output (1).mp4",
+        ],
+    )
     def test_infer_info_string_with_special_chars(self, save_path):
         """Test InferInfo with special characters in save_path."""
         from x_base.utils.infer_info import InferInfo
@@ -270,8 +273,9 @@ class TestInferInfoEdgeCases:
         info = InferInfo()
         info.update_info(args)
 
-        assert info.frames == expected_frames, \
-            f"Input {input_frames} should adjust to {expected_frames}, got {info.frames}"
+        assert (
+            info.frames == expected_frames
+        ), f"Input {input_frames} should adjust to {expected_frames}, got {info.frames}"
 
     def test_hunyuan_frames_always_satisfy_constraint(self):
         """Test that HunyuanVideo frames always satisfy 4*k+1 after adjustment."""
@@ -297,22 +301,24 @@ class TestInferInfoEdgeCases:
             info.update_info(args)
 
             # After adjustment, must satisfy 4*k+1
-            assert (info.frames - 1) % 4 == 0, \
-                f"Frames {info.frames} doesn't satisfy 4*k+1 constraint"
+            assert (info.frames - 1) % 4 == 0, f"Frames {info.frames} doesn't satisfy 4*k+1 constraint"
 
 
 class TestInferInfoModelSpecific:
     """Test model-specific behavior."""
 
-    @pytest.mark.parametrize("model,should_adjust", [
-        ("HunyuanVideo-T2V-13B", True),
-        ("HunyuanVideo-I2V-13B", True),
-        ("Wan2.1-T2V-1.3B", False),
-        ("Wan2.1-T2V-14B", False),
-        ("Wan2.1-I2V-14B", False),
-        ("Wan2.2-T2V-A14B", False),
-        ("CogVideoX-5b", False),
-    ])
+    @pytest.mark.parametrize(
+        "model,should_adjust",
+        [
+            ("HunyuanVideo-T2V-13B", True),
+            ("HunyuanVideo-I2V-13B", True),
+            ("Wan2.1-T2V-1.3B", False),
+            ("Wan2.1-T2V-14B", False),
+            ("Wan2.1-I2V-14B", False),
+            ("Wan2.2-T2V-A14B", False),
+            ("CogVideoX-5b", False),
+        ],
+    )
     def test_frame_adjustment_by_model(self, model, should_adjust):
         """Test frame adjustment behavior varies by model."""
         from x_base.utils.infer_info import InferInfo

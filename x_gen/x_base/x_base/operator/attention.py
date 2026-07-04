@@ -3,7 +3,7 @@ import os
 
 import torch
 import torch.nn.functional as F
-from diffusers.utils import logging
+from diffusers.utils import logging  # noqa: F811
 
 from .rainfusion import Rainfusion
 
@@ -19,6 +19,7 @@ except ImportError:
 
 try:
     from mindiesd import attention_forward
+
     LA_AVAILABLE = True
 except ImportError:
     logger.error("Not install mindiesd, not laserattention")
@@ -29,9 +30,13 @@ SAGE_SEQ_LEN_THRESHOLD = int(os.getenv("SAGE_SEQ_LEN_THRESHOLD", 10000))
 
 def base_attention_infer(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
     return F.scaled_dot_product_attention(
-        query, key, value,
-        attn_mask=attn_mask, dropout_p=dropout_p,
-        is_causal=is_causal, scale=scale,
+        query,
+        key,
+        value,
+        attn_mask=attn_mask,
+        dropout_p=dropout_p,
+        is_causal=is_causal,
+        scale=scale,
     )
 
 
@@ -40,7 +45,7 @@ def sage_attention_infer_quant_scale(query, key, value, attn_mask=None, dropout_
     B, N, Sq, D = query.shape
     B, N, Sk, D = key.shape
     if D == 128 and Sq > SAGE_SEQ_LEN_THRESHOLD and Sk > SAGE_SEQ_LEN_THRESHOLD:
-        q_int8, deq_scale1 = cann_ops.block_quant(query, sm_scale=D ** -0.5, block_size=128, is_query=True)
+        q_int8, deq_scale1 = cann_ops.block_quant(query, sm_scale=D**-0.5, block_size=128, is_query=True)
         k_int8, deq_scalek = cann_ops.block_quant(key, sm_scale=None, block_size=1024, is_query=False)
         return cann_ops.npu_sage_attention(
             q_int8.contiguous(),
@@ -53,7 +58,8 @@ def sage_attention_infer_quant_scale(query, key, value, attn_mask=None, dropout_
             scale_value=0.0,
             num_key_value_heads=N,
             next_tokens=65535,
-            atten_mask=attn_mask)
+            atten_mask=attn_mask,
+        )
     else:
         return base_attention_infer(query, key, value)
 
@@ -72,10 +78,11 @@ def sage_attention_infer(query, key, value, attn_mask=None, dropout_p=0.0, is_ca
             deq_scalek=deq_scalek,
             num_heads=N,
             input_layout="BNSD",
-            scale_value=D ** -0.5,
+            scale_value=D**-0.5,
             num_key_value_heads=N,
             next_tokens=65535,
-            atten_mask=attn_mask)
+            atten_mask=attn_mask,
+        )
     else:
         return base_attention_infer(query, key, value)
 
@@ -83,11 +90,12 @@ def sage_attention_infer(query, key, value, attn_mask=None, dropout_p=0.0, is_ca
 def laser_attention_infer(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
     B, N, Sq, D = query.shape
     B, N, Sk, D = key.shape
-    scale = D ** -0.5
+    scale = D**-0.5  # noqa: F841
     MIN_SEQLEN_SELF = 4000
     if Sk >= MIN_SEQLEN_SELF:
-        return attention_forward(query, key, value,
-                                opt_mode="manual", op_type="ascend_laser_attention", layout="BNSD", head_first=True)
+        return attention_forward(
+            query, key, value, opt_mode="manual", op_type="ascend_laser_attention", layout="BNSD", head_first=True
+        )
     else:
         return base_attention_infer(query, key, value)
 
@@ -154,30 +162,29 @@ class AttentionManager:
             skip_timesteps=skip_timesteps,
             sparsity=sparsity,
         )
-        self.atten_mask_all = Rainfusion.get_atten_mask(
-            grid_size=grid_size,
-            sparsity=sparsity
-        )
+        self.atten_mask_all = Rainfusion.get_atten_mask(grid_size=grid_size, sparsity=sparsity)
         self.t_idx = -1
 
     def set_ada_bsa_sparse_flash_attention(self, sparsity: float = 0.7):
-       self.ada_sparsity = sparsity
+        self.ada_sparsity = sparsity
 
-    def ada_bsa_sparse_flash_attention_infer(self, query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
+    def ada_bsa_sparse_flash_attention_infer(
+        self, query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None
+    ):
         B, N, Sq, D = query.shape
         B, N, Sk, D = key.shape
-        scale = D ** -0.5
+        scale = D**-0.5
         if Sq == Sk:
             # Going to sparse attention
-            head_num=None
-            keep_sink=True
-            eep_recent=True
-            keep_sink=True
-            keep_recent=True
-            sparsity=self.ada_sparsity
-            cdf_threshold=1.0
-            sparse_size=128
-            stride=8
+            head_num = None  # noqa: F841
+            keep_sink = True
+            eep_recent = True  # noqa: F841
+            keep_sink = True
+            keep_recent = True
+            sparsity = self.ada_sparsity
+            cdf_threshold = 1.0
+            sparse_size = 128
+            stride = 8
             smask, sct = torch.ops.mindiesd.sparse_block_estimate(
                 query,
                 key,
@@ -193,7 +200,7 @@ class AttentionManager:
                 causal=is_causal,
                 keep_sink=keep_sink,
                 keep_recent=keep_recent,
-                row_sparse=1.0 - sparsity
+                row_sparse=1.0 - sparsity,
             )
             value = value.contiguous()
             out = torch.ops.mindiesd.block_sparse_attention(
@@ -207,7 +214,7 @@ class AttentionManager:
                 causal=is_causal,
                 sparse_size=sparse_size,
                 sparse_mask=smask,
-                sparse_count_table=sct
+                sparse_count_table=sct,
             )
             return out
         else:
@@ -215,20 +222,25 @@ class AttentionManager:
 
     def attention(self, query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
         if self.is_sage_attention:
-            return sage_attention_infer(query, key, value, attn_mask=attn_mask, dropout_p=dropout_p,
-                                        is_causal=is_causal, scale=scale)
+            return sage_attention_infer(
+                query, key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale
+            )
         elif self.is_laser_attention:
-            return laser_attention_infer(query, key, value, attn_mask=attn_mask, dropout_p=dropout_p,
-                                         is_causal=is_causal, scale=scale)
+            return laser_attention_infer(
+                query, key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale
+            )
         elif self.is_rainfusion_attention:
-            return self.rainfusion_attention_infer(query, key, value, attn_mask=attn_mask, dropout_p=dropout_p,
-                                                   is_causal=is_causal, scale=scale)
+            return self.rainfusion_attention_infer(
+                query, key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale
+            )
         elif self.is_sparse_attention:
-            return self.ada_bsa_sparse_flash_attention_infer(query, key, value, attn_mask=attn_mask, dropout_p=dropout_p,
-                                         is_causal=is_causal, scale=scale)
+            return self.ada_bsa_sparse_flash_attention_infer(
+                query, key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale
+            )
         else:
-            return base_attention_infer(query, key, value, attn_mask=attn_mask, dropout_p=dropout_p,
-                                        is_causal=is_causal, scale=scale)
+            return base_attention_infer(
+                query, key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale
+            )
 
 
 attention_manager = AttentionManager()

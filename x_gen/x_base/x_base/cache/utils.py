@@ -3,17 +3,18 @@ Cache 加速模块工具函数
 
 包含各模型的前向传播前置/后置处理、LoRA 处理等通用函数。
 """
-from typing import Dict, Union, Any, Optional, Tuple
+
+from typing import Any
 
 import torch
-from diffusers.utils import USE_PEFT_BACKEND, scale_lora_layers, unscale_lora_layers, logging
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
+from diffusers.utils import USE_PEFT_BACKEND, logging, scale_lora_layers, unscale_lora_layers
 
 logger = logging.get_logger(__name__)
 
 
 # ============ LoRA 处理 ============
-def pre_forward(self, attention_kwargs: Optional[Dict[str, Any]] = None) -> float:
+def pre_forward(self, attention_kwargs: dict[str, Any] | None = None) -> float:
     """前向传播前的 LoRA 缩放处理
 
     Args:
@@ -33,9 +34,7 @@ def pre_forward(self, attention_kwargs: Optional[Dict[str, Any]] = None) -> floa
         scale_lora_layers(self, lora_scale)
     else:
         if attention_kwargs is not None and attention_kwargs.get("scale", None) is not None:
-            logger.warning(
-                "Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
-            )
+            logger.warning("Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective.")
     return lora_scale
 
 
@@ -51,9 +50,9 @@ def wan_pre_forward(
     hidden_states: torch.Tensor,
     timestep: torch.LongTensor,
     encoder_hidden_states: torch.Tensor,
-    encoder_hidden_states_image: Optional[torch.Tensor] = None,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
-) -> Tuple:
+    encoder_hidden_states_image: torch.Tensor | None = None,
+    attention_kwargs: dict[str, Any] | None = None,
+) -> tuple:
     """Wan 模型前向传播前置处理
 
     返回处理后的中间结果，供后续 forward_block 使用。
@@ -64,7 +63,6 @@ def wan_pre_forward(
          batch_size, p_t, p_h, p_w)
     """
     # 导入分布式相关模块
-    from x_base.sequence_parallelism import set_pad, split_sequence
     from x_base.operator import attention_manager
 
     # 1. 初始化阶段
@@ -105,15 +103,22 @@ def wan_pre_forward(
 
     # 融合图像和文本条件
     if encoder_hidden_states_image is not None:
-        encoder_hidden_states = torch.concat(
-            [encoder_hidden_states_image, encoder_hidden_states], dim=1
-        )
+        encoder_hidden_states = torch.concat([encoder_hidden_states_image, encoder_hidden_states], dim=1)
 
     return (
-        lora_scale, hidden_states, encoder_hidden_states,
-        post_patch_num_frames, post_patch_height, post_patch_width,
-        rotary_emb, temb, timestep_proj,
-        batch_size, p_t, p_h, p_w
+        lora_scale,
+        hidden_states,
+        encoder_hidden_states,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        rotary_emb,
+        temb,
+        timestep_proj,
+        batch_size,
+        p_t,
+        p_h,
+        p_w,
     )
 
 
@@ -125,7 +130,9 @@ def wan_post_forward(
     post_patch_num_frames: int,
     post_patch_height: int,
     post_patch_width: int,
-    p_t: int, p_h: int, p_w: int,
+    p_t: int,
+    p_h: int,
+    p_w: int,
     lora_scale: float,
 ) -> torch.Tensor:
     """Wan 模型前向传播后置处理
@@ -184,8 +191,8 @@ def hunyuan_pre_forward(
     encoder_attention_mask: torch.Tensor,
     pooled_projections: torch.Tensor,
     guidance: torch.Tensor = None,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
-) -> Tuple:
+    attention_kwargs: dict[str, Any] | None = None,
+) -> tuple:
     """Hunyuan 模型前向传播前置处理"""
     lora_scale = pre_forward(self, attention_kwargs)
 
@@ -212,9 +219,7 @@ def hunyuan_pre_forward(
     latent_sequence_length = hidden_states.shape[1]
     condition_sequence_length = encoder_hidden_states.shape[1]
     sequence_length = latent_sequence_length + condition_sequence_length
-    attention_mask = torch.zeros(
-        batch_size, sequence_length, device=hidden_states.device, dtype=torch.bool
-    )
+    attention_mask = torch.zeros(batch_size, sequence_length, device=hidden_states.device, dtype=torch.bool)
 
     effective_condition_sequence_length = encoder_attention_mask.sum(dim=1, dtype=torch.int)
     effective_sequence_length = latent_sequence_length + effective_condition_sequence_length
@@ -223,14 +228,21 @@ def hunyuan_pre_forward(
         attention_mask[i, : effective_sequence_length[i]] = True
     attention_mask = attention_mask.unsqueeze(1).unsqueeze(1)
 
-    hidden_states, first_frame_num_tokens = self._split_sequence_before_blocks(
-        hidden_states, first_frame_num_tokens
-    )
+    hidden_states, first_frame_num_tokens = self._split_sequence_before_blocks(hidden_states, first_frame_num_tokens)
 
     return (
-        lora_scale, hidden_states, encoder_hidden_states, temb, attention_mask,
-        image_rotary_emb, batch_size, post_patch_num_frames, post_patch_height,
-        post_patch_width, p, p_t
+        lora_scale,
+        hidden_states,
+        encoder_hidden_states,
+        temb,
+        attention_mask,
+        image_rotary_emb,
+        batch_size,
+        post_patch_num_frames,
+        post_patch_height,
+        post_patch_width,
+        p,
+        p_t,
     )
 
 
@@ -242,10 +254,11 @@ def hunyuan_post_forward(
     post_patch_num_frames: int,
     post_patch_height: int,
     post_patch_width: int,
-    p: int, p_t: int,
+    p: int,
+    p_t: int,
     lora_scale: float,
     return_dict: bool = True,
-) -> Union[torch.Tensor, Transformer2DModelOutput]:
+) -> torch.Tensor | Transformer2DModelOutput:
     """Hunyuan 模型前向传播后置处理"""
     hidden_states = self._gather_sequence_after_blocks(hidden_states)
 
@@ -271,14 +284,14 @@ def cogvideox_pre_forward(
     self,
     hidden_states: torch.Tensor,
     encoder_hidden_states: torch.Tensor,
-    timestep: Union[int, float, torch.LongTensor],
-    timestep_cond: Optional[torch.Tensor] = None,
-    ofs: Optional[Union[int, float, torch.LongTensor]] = None,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
-) -> Tuple:
+    timestep: int | float | torch.LongTensor,
+    timestep_cond: torch.Tensor | None = None,
+    ofs: int | float | torch.LongTensor | None = None,
+    attention_kwargs: dict[str, Any] | None = None,
+) -> tuple:
     """CogVideoX 模型前向传播前置处理"""
+
     from x_base.sequence_parallelism import set_pad, split_sequence
-    from diffusers.utils import is_torch_version
 
     lora_scale = pre_forward(self, attention_kwargs)
 
@@ -307,11 +320,18 @@ def cogvideox_pre_forward(
     # 序列并行
     if self.parallel_manager.sp_size > 1:
         set_pad("pad", hidden_states.shape[1], self.parallel_manager.sp_group)
-        hidden_states = split_sequence(hidden_states, self.parallel_manager.sp_group, dim=1, pad=get_pad("pad"))
+        hidden_states = split_sequence(hidden_states, self.parallel_manager.sp_group, dim=1, pad=get_pad("pad"))  # noqa: F821
 
     return (
-        lora_scale, hidden_states, encoder_hidden_states, emb,
-        batch_size, num_frames, height, width, text_seq_length
+        lora_scale,
+        hidden_states,
+        encoder_hidden_states,
+        emb,
+        batch_size,
+        num_frames,
+        height,
+        width,
+        text_seq_length,
     )
 
 
@@ -327,7 +347,7 @@ def cogvideox_post_forward(
     text_seq_length: int,
     lora_scale: float,
     return_dict: bool = True,
-) -> Union[torch.Tensor, Transformer2DModelOutput]:
+) -> torch.Tensor | Transformer2DModelOutput:
     """CogVideoX 模型前向传播后置处理"""
     from x_base.sequence_parallelism import gather_sequence, get_pad
 

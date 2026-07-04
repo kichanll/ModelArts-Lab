@@ -1,14 +1,15 @@
 """
 Pytest configuration and fixtures for x_diffusers unit tests.
 """
-import pytest
-import sys
-from unittest.mock import MagicMock, patch
-from argparse import Namespace
-
 
 # 添加项目根目录到路径
 import pathlib
+import sys
+from argparse import Namespace
+from unittest.mock import MagicMock
+
+import pytest
+
 _root_dir = pathlib.Path(__file__).parent.parent
 sys.path.insert(0, str(_root_dir))
 
@@ -18,15 +19,9 @@ sys.path.insert(0, str(_root_dir))
 # ============================================================
 def pytest_configure(config):
     """Register custom markers."""
-    config.addinivalue_line(
-        "markers", "requires_torch: mark test as requiring torch"
-    )
-    config.addinivalue_line(
-        "markers", "requires_diffusers: mark test as requiring diffusers"
-    )
-    config.addinivalue_line(
-        "markers", "integration: mark test as integration test"
-    )
+    config.addinivalue_line("markers", "requires_torch: mark test as requiring torch")
+    config.addinivalue_line("markers", "requires_diffusers: mark test as requiring diffusers")
+    config.addinivalue_line("markers", "integration: mark test as integration test")
 
 
 # ============================================================
@@ -46,10 +41,7 @@ SUPPORTED_MODELS = [
 
 VALID_TASK_TYPES = ["t2v", "i2v", "t2i"]
 
-VALID_VACE_TASKS = [
-    "t2v", "i2v", "v2lf", "flf2v", "random2v",
-    "inpaint", "outpaint", "openpose", "iwri"
-]
+VALID_VACE_TASKS = ["t2v", "i2v", "v2lf", "flf2v", "random2v", "inpaint", "outpaint", "openpose", "iwri"]
 
 VALID_TURBO_MODES = ["default", "faiz", "next_faiz"]
 
@@ -107,7 +99,9 @@ def create_mock_args(**overrides):
         "vae_lightning": False,
         "frame_interpolation": False,
         "frame_interpolation_sr": False,
-        "frame_model_path": str(pathlib.Path(__file__).parent.parent.parent.parent.parent / "weights" / "IFRNet_S_Vimeo90K.pth"),
+        "frame_model_path": str(
+            pathlib.Path(__file__).parent.parent.parent.parent.parent / "weights" / "IFRNet_S_Vimeo90K.pth"
+        ),
         "x": False,
         "x_model_path": "Wan-AI/Wan2.1-T2V-14B-Diffusers_x",
         "x_model_path_2": "Wan-AI/Wan2.1-T2V-14B-Diffusers_x_2",
@@ -291,9 +285,9 @@ def pipe_factory():
 # Import NPU mock fixtures for use in transformer/VAE tests
 # These are defined in conftest_npu.py and imported here
 
-import importlib.util
-import os
-import stat
+import importlib.util  # noqa: E402
+import os  # noqa: E402
+import stat  # noqa: E402
 
 _conftest_npu_path = os.path.join(os.path.dirname(__file__), "conftest_npu.py")
 if os.path.exists(_conftest_npu_path):

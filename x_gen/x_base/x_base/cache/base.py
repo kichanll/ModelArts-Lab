@@ -3,17 +3,17 @@ Cache 加速模块基础组件
 
 提供缓存策略抽象基类、TeaCache/MagCache 实现、以及通用工具类。
 """
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import DefaultDict, Dict, List, Optional, Union, Any, Tuple
-from collections import defaultdict
+
 import contextlib
+from abc import ABC, abstractmethod
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import torch
 import torch.distributed as dist
 from diffusers.utils import logging
-from diffusers.models.modeling_outputs import Transformer2DModelOutput
 
 # 从统一配置模块导入
 from x_base.config import load_cache_config
@@ -34,7 +34,7 @@ def get_group(group=None):
     if group is None:
         group = c10d._get_default_group()
     if isinstance(group, dist.ProcessGroup):
-        pg: Union[dist.ProcessGroup, List[dist.ProcessGroup]] = group
+        pg: dist.ProcessGroup | list[dist.ProcessGroup] = group
     else:
         pg = group.get_group()
     return pg
@@ -60,10 +60,9 @@ def all_reduce_sync(x, *args, group=None, **kwargs):
 @dataclass
 class CacheContext:
     """缓存上下文，管理中间计算结果的存储"""
-    buffers: Dict[str, torch.Tensor] = field(default_factory=dict)
-    incremental_name_counters: DefaultDict[str, int] = field(
-        default_factory=lambda: defaultdict(int)
-    )
+
+    buffers: dict[str, torch.Tensor] = field(default_factory=dict)
+    incremental_name_counters: defaultdict[str, int] = field(default_factory=lambda: defaultdict(int))
 
     def get_incremental_name(self, name=None):
         if name is None:
@@ -87,14 +86,14 @@ class CacheContext:
         self.buffers.clear()
 
 
-_current_cache_context: Optional[CacheContext] = None
+_current_cache_context: CacheContext | None = None
 
 
 def create_cache_context() -> CacheContext:
     return CacheContext()
 
 
-def get_current_cache_context() -> Optional[CacheContext]:
+def get_current_cache_context() -> CacheContext | None:
     return _current_cache_context
 
 
@@ -138,7 +137,7 @@ class CacheStrategy(ABC):
     """
 
     @abstractmethod
-    def should_skip(self, step: int, modulated_input: Optional[torch.Tensor] = None) -> bool:
+    def should_skip(self, step: int, modulated_input: torch.Tensor | None = None) -> bool:
         """判断当前步骤是否可以跳过计算，使用缓存结果
 
         Args:
@@ -151,7 +150,7 @@ class CacheStrategy(ABC):
         pass
 
     @abstractmethod
-    def get_residual(self, step: int) -> Optional[torch.Tensor]:
+    def get_residual(self, step: int) -> torch.Tensor | None:
         """获取缓存的残差
 
         Args:
@@ -177,7 +176,7 @@ class CacheStrategy(ABC):
         """重置缓存状态，准备新的推理序列"""
         pass
 
-    def on_step_complete(self, step: int):
+    def on_step_complete(self, step: int):  # noqa: B027
         """步骤完成后的回调（可选实现）"""
         pass
 
@@ -193,10 +192,10 @@ class TeaCacheStrategy(CacheStrategy):
     def __init__(
         self,
         threshold: float,
-        coefficients: List[float],
+        coefficients: list[float],
         num_steps: int,
         ret_steps: int = 2,
-        cutoff_steps: Optional[int] = None,
+        cutoff_steps: int | None = None,
         use_ref_steps: bool = True,
         parallelized: bool = False,
     ):
@@ -228,7 +227,7 @@ class TeaCacheStrategy(CacheStrategy):
         """获取步骤索引（0=even, 1=odd）"""
         return step % 2
 
-    def should_skip(self, step: int, modulated_input: Optional[torch.Tensor] = None) -> bool:
+    def should_skip(self, step: int, modulated_input: torch.Tensor | None = None) -> bool:
         idx = self._get_idx(step)
 
         # warmup 或 cooldown 阶段不跳过
@@ -245,10 +244,7 @@ class TeaCacheStrategy(CacheStrategy):
             self._should_calc[idx] = True
             return False
 
-        relative_diff = (
-            (modulated_input - prev_input).abs().mean()
-            / prev_input.abs().mean()
-        )
+        relative_diff = (modulated_input - prev_input).abs().mean() / prev_input.abs().mean()
 
         # 累积缩放后的差异
         scaled_diff = self.coefficients(relative_diff.cpu().item())
@@ -266,7 +262,7 @@ class TeaCacheStrategy(CacheStrategy):
 
         return not should_calc
 
-    def get_residual(self, step: int) -> Optional[torch.Tensor]:
+    def get_residual(self, step: int) -> torch.Tensor | None:
         idx = self._get_idx(step)
         return self._previous_residual[idx]
 
@@ -294,7 +290,7 @@ class TeaCacheSimpleStrategy(CacheStrategy):
     def __init__(
         self,
         threshold: float,
-        coefficients: List[float],
+        coefficients: list[float],
         num_steps: int,
     ):
         self.threshold = threshold
@@ -302,10 +298,10 @@ class TeaCacheSimpleStrategy(CacheStrategy):
         self.num_steps = num_steps
 
         self._accumulated_distance = 0.0
-        self._previous_input: Optional[torch.Tensor] = None
-        self._previous_residual: Optional[torch.Tensor] = None
+        self._previous_input: torch.Tensor | None = None
+        self._previous_residual: torch.Tensor | None = None
 
-    def should_skip(self, step: int, modulated_input: Optional[torch.Tensor] = None) -> bool:
+    def should_skip(self, step: int, modulated_input: torch.Tensor | None = None) -> bool:
         # 首步和末步不跳过
         if step == 0 or step == self.num_steps - 1:
             self._accumulated_distance = 0.0
@@ -317,10 +313,7 @@ class TeaCacheSimpleStrategy(CacheStrategy):
             self._previous_input = modulated_input.clone() if modulated_input else None
             return False
 
-        relative_diff = (
-            (modulated_input - self._previous_input).abs().mean()
-            / self._previous_input.abs().mean()
-        )
+        relative_diff = (modulated_input - self._previous_input).abs().mean() / self._previous_input.abs().mean()
         scaled_diff = self.coefficients(relative_diff.cpu().item())
         self._accumulated_distance += scaled_diff
 
@@ -331,7 +324,7 @@ class TeaCacheSimpleStrategy(CacheStrategy):
         self._previous_input = modulated_input.clone()
         return not should_calc
 
-    def get_residual(self, step: int) -> Optional[torch.Tensor]:
+    def get_residual(self, step: int) -> torch.Tensor | None:
         return self._previous_residual
 
     def update_cache(self, step: int, residual: torch.Tensor):
@@ -359,7 +352,7 @@ class MagCacheStrategy(CacheStrategy):
         mag_ratios: np.ndarray,
         retention_ratio: float = 0.2,
         is_distill: bool = False,
-        split_step: Optional[int] = None,
+        split_step: int | None = None,
     ):
         """
         Args:
@@ -384,10 +377,10 @@ class MagCacheStrategy(CacheStrategy):
         self._accumulated_err = [0.0] * num_caches
         self._accumulated_steps = [0] * num_caches
         self._accumulated_ratio = [1.0] * num_caches
-        self._residual_cache: List[Optional[torch.Tensor]] = [None] * num_caches
+        self._residual_cache: list[torch.Tensor | None] = [None] * num_caches
 
         # Wan2.2 模式标志
-        self._wan2_mode: Optional[str] = None
+        self._wan2_mode: str | None = None
 
     def set_wan2_mode(self, mode: str):
         """设置 Wan2.2 模式（t2v/i2v）"""
@@ -402,22 +395,18 @@ class MagCacheStrategy(CacheStrategy):
         """判断当前步骤是否应该使用 magcache 逻辑"""
         if self.split_step is not None and self._wan2_mode is not None:
             if self._wan2_mode == "i2v":
-                return step >= int(
-                    self.split_step + (self.num_steps - self.split_step) * self.retention_ratio
-                )
+                return step >= int(self.split_step + (self.num_steps - self.split_step) * self.retention_ratio)
             else:  # t2v
                 retention = self.retention_ratio
                 if step < int(self.split_step * retention):
                     return False
-                if self.split_step <= step <= int(
-                    (self.num_steps - self.split_step) * retention + self.split_step
-                ):
+                if self.split_step <= step <= int((self.num_steps - self.split_step) * retention + self.split_step):  # noqa: SIM103
                     return False
                 return True
         else:
             return step >= int(self.num_steps * self.retention_ratio)
 
-    def should_skip(self, step: int, modulated_input: Optional[torch.Tensor] = None) -> bool:
+    def should_skip(self, step: int, modulated_input: torch.Tensor | None = None) -> bool:
         if not self._should_use_magcache(step):
             return False
 
@@ -431,10 +420,7 @@ class MagCacheStrategy(CacheStrategy):
         self._accumulated_err[idx] += cur_skip_err
 
         # 判断是否满足跳过条件
-        should_skip = (
-            self._accumulated_err[idx] < self.threshold
-            and self._accumulated_steps[idx] <= self.K
-        )
+        should_skip = self._accumulated_err[idx] < self.threshold and self._accumulated_steps[idx] <= self.K
 
         if not should_skip:
             # 重置累积状态
@@ -444,7 +430,7 @@ class MagCacheStrategy(CacheStrategy):
 
         return should_skip
 
-    def get_residual(self, step: int) -> Optional[torch.Tensor]:
+    def get_residual(self, step: int) -> torch.Tensor | None:
         idx = self._get_idx(step)
         return self._residual_cache[idx]
 
@@ -506,9 +492,7 @@ class CachedTransformerBlocks(torch.nn.Module):
         torch._dynamo.graph_break()
         if can_use_cache:
             del first_hidden_states_residual
-            hidden_states, encoder_hidden_states = self._apply_prev_residual(
-                hidden_states, encoder_hidden_states
-            )
+            hidden_states, encoder_hidden_states = self._apply_prev_residual(hidden_states, encoder_hidden_states)
         else:
             set_buffer("first_hidden_states_residual", first_hidden_states_residual)
             del first_hidden_states_residual
@@ -530,16 +514,14 @@ class CachedTransformerBlocks(torch.nn.Module):
 
     def _forward_no_cache(self, hidden_states, encoder_hidden_states, *args, **kwargs):
         for block in self.transformer_blocks:
-            hidden_states, encoder_hidden_states = block(
-                hidden_states, encoder_hidden_states, *args, **kwargs
-            )
+            hidden_states, encoder_hidden_states = block(hidden_states, encoder_hidden_states, *args, **kwargs)
             if not self.return_hidden_states_first:
                 hidden_states, encoder_hidden_states = encoder_hidden_states, hidden_states
         if self.single_transformer_blocks is not None:
             hidden_states = torch.cat([encoder_hidden_states, hidden_states], dim=1)
             for block in self.single_transformer_blocks:
                 hidden_states = block(hidden_states, *args, **kwargs)
-            hidden_states = hidden_states[:, encoder_hidden_states.shape[1]:]
+            hidden_states = hidden_states[:, encoder_hidden_states.shape[1] :]
         return (
             (hidden_states, encoder_hidden_states)
             if self.return_hidden_states_first
@@ -550,9 +532,7 @@ class CachedTransformerBlocks(torch.nn.Module):
         original_hidden_states = hidden_states
         original_encoder_hidden_states = encoder_hidden_states
         for block in self.transformer_blocks[1:]:
-            hidden_states, encoder_hidden_states = block(
-                hidden_states, encoder_hidden_states, *args, **kwargs
-            )
+            hidden_states, encoder_hidden_states = block(hidden_states, encoder_hidden_states, *args, **kwargs)
             if not self.return_hidden_states_first:
                 hidden_states, encoder_hidden_states = encoder_hidden_states, hidden_states
         if self.single_transformer_blocks is not None:
@@ -568,9 +548,7 @@ class CachedTransformerBlocks(torch.nn.Module):
         encoder_hidden_states_shape = encoder_hidden_states.shape
 
         hidden_states = hidden_states.flatten().contiguous().reshape(hidden_states_shape)
-        encoder_hidden_states = encoder_hidden_states.flatten().contiguous().reshape(
-            encoder_hidden_states_shape
-        )
+        encoder_hidden_states = encoder_hidden_states.flatten().contiguous().reshape(encoder_hidden_states_shape)
 
         hidden_states_residual = hidden_states - original_hidden_states
         encoder_hidden_states_residual = encoder_hidden_states - original_encoder_hidden_states
@@ -631,11 +609,7 @@ def nearest_interp(src_array: np.ndarray, target_length: int) -> np.ndarray:
 
 
 # ============ TeaCache 配置辅助函数 ============
-def get_teacache_config(
-    model_type: str,
-    model_key: str,
-    use_ref_steps: bool = True
-) -> Dict[str, Any]:
+def get_teacache_config(model_type: str, model_key: str, use_ref_steps: bool = True) -> dict[str, Any]:
     """获取 TeaCache 配置
 
     Args:
@@ -653,7 +627,7 @@ def get_teacache_config(
     model_config = teacache_config.get(model_type, {}).get(model_key, {})
 
     if not model_config:
-        logger.warning(f"No teacache config found for {model_type}/{model_key}, using defaults")
+        logger.warning(f"No teacache config found for {model_type}/{model_key}, using defaults")  # noqa: G004
         return {}
 
     result = {}
@@ -675,11 +649,7 @@ def get_teacache_config(
     return result
 
 
-def get_teacache_coefficients(
-    model_type: str,
-    model_key: str,
-    use_ref_steps: bool = True
-) -> Optional[List[float]]:
+def get_teacache_coefficients(model_type: str, model_key: str, use_ref_steps: bool = True) -> list[float] | None:
     """获取 TeaCache 多项式系数
 
     Args:
@@ -692,4 +662,3 @@ def get_teacache_coefficients(
     """
     config = get_teacache_config(model_type, model_key, use_ref_steps)
     return config.get("coefficients") or None
-

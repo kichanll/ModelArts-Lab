@@ -3,10 +3,11 @@ Sequence Parallelism - Communication Backend
 
 通信后端抽象和 PyTorch Distributed 实现。
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Protocol, Tuple
+from typing import Protocol
 
 import torch
 import torch.distributed as dist
@@ -16,8 +17,11 @@ from torch.distributed import ProcessGroup, Work
 
 class CollectiveBackend(Protocol):
     """通信后端协议"""
-    def all_gather(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]: ...
-    def reduce_scatter(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]: ...
+
+    def all_gather(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> tuple[Tensor, Work | None]: ...
+    def reduce_scatter(
+        self, tensor: Tensor, group: ProcessGroup, async_op: bool = False
+    ) -> tuple[Tensor, Work | None]: ...
     def all_to_all(self, tensor: Tensor, group: ProcessGroup, scatter_dim: int, gather_dim: int) -> Tensor: ...
 
 
@@ -30,15 +34,17 @@ class BaseCommBackend(ABC):
         pass
 
     @abstractmethod
-    def all_gather(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]:
+    def all_gather(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> tuple[Tensor, Work | None]:
         pass
 
     @abstractmethod
-    def reduce_scatter(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]:
+    def reduce_scatter(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> tuple[Tensor, Work | None]:
         pass
 
     @abstractmethod
-    def all_to_all_4d(self, tensor: Tensor, scatter_dim: int, gather_dim: int, group: ProcessGroup, use_sync: bool = False) -> Tensor:
+    def all_to_all_4d(
+        self, tensor: Tensor, scatter_dim: int, gather_dim: int, group: ProcessGroup, use_sync: bool = False
+    ) -> Tensor:
         pass
 
 
@@ -49,7 +55,7 @@ class TorchDistBackend(BaseCommBackend):
     def name(self) -> str:
         return "torch_dist"
 
-    def all_gather(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]:
+    def all_gather(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> tuple[Tensor, Work | None]:
         world_size = dist.get_world_size(group)
         if world_size == 1:
             return tensor.unsqueeze(0), None
@@ -62,7 +68,7 @@ class TorchDistBackend(BaseCommBackend):
         dist.all_gather(buffer_list, tensor, group=group)
         return output, None
 
-    def reduce_scatter(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> Tuple[Tensor, Optional[Work]]:
+    def reduce_scatter(self, tensor: Tensor, group: ProcessGroup, async_op: bool = False) -> tuple[Tensor, Work | None]:
         world_size = dist.get_world_size(group)
         if world_size == 1:
             return tensor.squeeze(0), None
@@ -76,7 +82,9 @@ class TorchDistBackend(BaseCommBackend):
         dist.reduce_scatter(output, buffer_list, group=group)
         return output, None
 
-    def all_to_all_4d(self, tensor: Tensor, scatter_dim: int, gather_dim: int, group: ProcessGroup, use_sync: bool = False) -> Tensor:
+    def all_to_all_4d(
+        self, tensor: Tensor, scatter_dim: int, gather_dim: int, group: ProcessGroup, use_sync: bool = False
+    ) -> Tensor:
         world_size = dist.get_world_size(group)
         if world_size == 1:
             return tensor
@@ -98,7 +106,13 @@ class TorchDistBackend(BaseCommBackend):
             bs, seqlen, shard_h = tensor.shape
             h = shard_h * world_size
             shard_seqlen = seqlen // world_size
-            input_t = tensor.reshape(bs, world_size, shard_seqlen, shard_h).transpose(0, 3).transpose(0, 1).contiguous().reshape(world_size, shard_h, shard_seqlen, bs)
+            input_t = (
+                tensor.reshape(bs, world_size, shard_seqlen, shard_h)
+                .transpose(0, 3)
+                .transpose(0, 1)
+                .contiguous()
+                .reshape(world_size, shard_h, shard_seqlen, bs)
+            )
             output = torch.empty_like(input_t)
             dist.all_to_all_single(output, input_t, group=group)
             if use_sync:
@@ -107,7 +121,7 @@ class TorchDistBackend(BaseCommBackend):
 
         raise ValueError(f"Invalid dims: scatter={scatter_dim}, gather={gather_dim}")
 
-    def model_sharding(self, model: torch.nn.Module, group: Optional[ProcessGroup] = None) -> None:
+    def model_sharding(self, model: torch.nn.Module, group: ProcessGroup | None = None) -> None:
         rank = dist.get_rank(group)
         world_size = dist.get_world_size(group)
         for _, param in model.named_parameters():
@@ -118,7 +132,7 @@ class TorchDistBackend(BaseCommBackend):
 
 
 # 全局默认后端
-_default_backend: Optional[TorchDistBackend] = None
+_default_backend: TorchDistBackend | None = None
 
 
 def get_default_backend() -> TorchDistBackend:

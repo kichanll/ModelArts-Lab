@@ -13,8 +13,9 @@ We simulate the module's behavior and verify the expected method injection.
 No sys.modules mocking at module level - using fixtures instead.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 @pytest.fixture(scope="module")
@@ -122,7 +123,7 @@ class TestPipelineMethodCounts:
         ]
 
         for pipeline in pipelines_with_enable_sp:
-            assert hasattr(pipeline, 'enable_sp')
+            assert hasattr(pipeline, "enable_sp")
             assert pipeline.enable_sp == mock_x_base.enable_sp
 
     def test_enable_vae_lightning_injection_correctness(self, mock_pipeline_objects):
@@ -139,5 +140,5 @@ class TestPipelineMethodCounts:
         ]
 
         for pipeline in pipelines_with_vae_lightning:
-            assert hasattr(pipeline, 'enable_vae_lightning')
+            assert hasattr(pipeline, "enable_vae_lightning")
             assert pipeline.enable_vae_lightning == mock_x_base.enable_vae_lightning

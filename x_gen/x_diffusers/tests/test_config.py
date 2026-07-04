@@ -3,19 +3,17 @@ Unit tests for config.py argument parsing functionality.
 
 Tests the parse_args and add_*_args functions for x_diffusers.
 """
-import pytest
+
 import argparse
 from unittest.mock import patch
 
+import pytest
 
 # ============================================================
 # Test data constants
 # ============================================================
 VALID_TASK_TYPES = ["t2v", "i2v", "t2i"]
-VALID_VACE_TASKS = [
-    "t2v", "i2v", "v2lf", "flf2v", "random2v",
-    "inpaint", "outpaint", "openpose", "iwri"
-]
+VALID_VACE_TASKS = ["t2v", "i2v", "v2lf", "flf2v", "random2v", "inpaint", "outpaint", "openpose", "iwri"]
 VALID_TURBO_MODES = ["default", "faiz", "next_faiz"]
 VALID_RESOLUTIONS = [1080, 720]
 
@@ -28,7 +26,7 @@ class TestParseArgs:
         from x_diffusers.adaptor.config import parse_args
 
         # Use no arguments to get defaults (mock sys.argv)
-        with patch('sys.argv', ['test_script']):
+        with patch("sys.argv", ["test_script"]):
             args = parse_args()
 
         assert args.model == "Wan2.1-T2V-14B"
@@ -46,7 +44,7 @@ class TestParseArgs:
         from x_diffusers.adaptor.config import parse_args
 
         custom_args = ["test_script", "--model", "Wan2.2-T2V-A14B", "--height", "720", "--width", "1280"]
-        with patch('sys.argv', custom_args):
+        with patch("sys.argv", custom_args):
             args = parse_args()
 
         assert args.model == "Wan2.2-T2V-A14B"
@@ -57,7 +55,7 @@ class TestParseArgs:
         """Test parse_args in benchmark mode."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', ['test_script', '--config']):
+        with patch("sys.argv", ["test_script", "--config"]):  # noqa: SIM117
             with pytest.raises(SystemExit):
                 # benchmark mode requires --config with value
                 parse_args(mode="benchmark")
@@ -66,7 +64,7 @@ class TestParseArgs:
         """Test parse_args in benchmark mode with config."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', ['test_script', '--config', 'benchmark.yaml']):
+        with patch("sys.argv", ["test_script", "--config", "benchmark.yaml"]):
             args = parse_args(mode="benchmark")
         assert args.config == "benchmark.yaml"
 
@@ -136,10 +134,7 @@ class TestInferenceArgs:
 
         parser = argparse.ArgumentParser()
         parser = add_inference_args(parser)
-        args = parser.parse_args([
-            "--prompt", "A beautiful sunset",
-            "--negative_prompt", "blurry"
-        ])
+        args = parser.parse_args(["--prompt", "A beautiful sunset", "--negative_prompt", "blurry"])
 
         assert args.prompt == "A beautiful sunset"
         assert args.negative_prompt == "blurry"
@@ -150,11 +145,7 @@ class TestInferenceArgs:
 
         parser = argparse.ArgumentParser()
         parser = add_inference_args(parser)
-        args = parser.parse_args([
-            "--height", "1080",
-            "--width", "1920",
-            "--frames", "81"
-        ])
+        args = parser.parse_args(["--height", "1080", "--width", "1920", "--frames", "81"])
 
         assert args.height == 1080
         assert args.width == 1920
@@ -249,11 +240,7 @@ class TestAbilitiesArgs:
 
         parser = argparse.ArgumentParser()
         parser = add_abilities_args(parser)
-        args = parser.parse_args([
-            "--atten_a8w8",
-            "--matmul_a8w8",
-            "--rope_fused"
-        ])
+        args = parser.parse_args(["--atten_a8w8", "--matmul_a8w8", "--rope_fused"])
 
         assert args.atten_a8w8 is True
         assert args.matmul_a8w8 is True
@@ -302,11 +289,9 @@ class TestArgsValidation:
         """Test model and path consistency."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', [
-            'test_script',
-            "--model", "Wan2.1-T2V-1.3B",
-            "--pretrained_model_name_or_path", "custom/path"
-        ]):
+        with patch(
+            "sys.argv", ["test_script", "--model", "Wan2.1-T2V-1.3B", "--pretrained_model_name_or_path", "custom/path"]
+        ):
             args = parse_args()
 
         assert args.model == "Wan2.1-T2V-1.3B"
@@ -316,11 +301,7 @@ class TestArgsValidation:
         """Test i2v task with image path."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', [
-            'test_script',
-            "--task_type", "i2v",
-            "--i2v_image_path", "input.jpg"
-        ]):
+        with patch("sys.argv", ["test_script", "--task_type", "i2v", "--i2v_image_path", "input.jpg"]):
             args = parse_args()
 
         assert args.task_type == "i2v"
@@ -330,7 +311,7 @@ class TestArgsValidation:
         """Test sequence parallel with sp > 1."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', ['test_script', "--sp", "4"]):
+        with patch("sys.argv", ["test_script", "--sp", "4"]):
             args = parse_args()
 
         assert args.sp == 4
@@ -340,17 +321,17 @@ class TestArgsValidation:
         from x_diffusers.adaptor.config import parse_args
 
         # Test 'all' option
-        with patch('sys.argv', ['test_script', "--fsdp", "all"]):
+        with patch("sys.argv", ["test_script", "--fsdp", "all"]):
             args = parse_args()
         assert args.fsdp == "all"
 
         # Test 'text_encoder' option
-        with patch('sys.argv', ['test_script', "--fsdp", "text_encoder"]):
+        with patch("sys.argv", ["test_script", "--fsdp", "text_encoder"]):
             args = parse_args()
         assert args.fsdp == "text_encoder"
 
         # Test 'transformer' option
-        with patch('sys.argv', ['test_script', "--fsdp", "transformer"]):
+        with patch("sys.argv", ["test_script", "--fsdp", "transformer"]):
             args = parse_args()
         assert args.fsdp == "transformer"
 
@@ -362,7 +343,7 @@ class TestArgsEdgeCases:
         """Test empty prompt."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', ['test_script', "--prompt", ""]):
+        with patch("sys.argv", ["test_script", "--prompt", ""]):
             args = parse_args()
 
         assert args.prompt == ""
@@ -371,10 +352,7 @@ class TestArgsEdgeCases:
         """Test special characters in save path."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', [
-            'test_script',
-            "--save_path", "/path/with spaces/output.mp4"
-        ]):
+        with patch("sys.argv", ["test_script", "--save_path", "/path/with spaces/output.mp4"]):
             args = parse_args()
 
         assert args.save_path == "/path/with spaces/output.mp4"
@@ -383,7 +361,7 @@ class TestArgsEdgeCases:
         """Test large frame count."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', ['test_script', "--frames", "1000"]):
+        with patch("sys.argv", ["test_script", "--frames", "1000"]):
             args = parse_args()
 
         assert args.frames == 1000
@@ -392,11 +370,7 @@ class TestArgsEdgeCases:
         """Test high resolution values."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', [
-            'test_script',
-            "--height", "2160",
-            "--width", "3840"
-        ]):
+        with patch("sys.argv", ["test_script", "--height", "2160", "--width", "3840"]):
             args = parse_args()
 
         assert args.height == 2160
@@ -406,11 +380,18 @@ class TestArgsEdgeCases:
         """Test multiple LoRA paths."""
         from x_diffusers.adaptor.config import parse_args
 
-        with patch('sys.argv', [
-            'test_script',
-            "--lora_path_list", "lora1.safetensors", "lora2.safetensors",
-            "--lora_scale_weight_list", "0.5", "0.5"
-        ]):
+        with patch(
+            "sys.argv",
+            [
+                "test_script",
+                "--lora_path_list",
+                "lora1.safetensors",
+                "lora2.safetensors",
+                "--lora_scale_weight_list",
+                "0.5",
+                "0.5",
+            ],
+        ):
             args = parse_args()
 
         assert args.lora_path_list == ["lora1.safetensors", "lora2.safetensors"]

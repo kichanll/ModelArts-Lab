@@ -1,30 +1,26 @@
-from math import prod
-from typing import Union, Tuple, Optional
-
-import imageio
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
-from diffusers import ModelMixin, ConfigMixin
+from diffusers import ConfigMixin, ModelMixin
 from diffusers.configuration_utils import register_to_config
 from diffusers.loaders import FromOriginalModelMixin
 from diffusers.models.autoencoders import autoencoder_kl_cogvideox
-from diffusers.models.autoencoders.autoencoder_kl_cogvideox import CogVideoXSafeConv3d, DecoderOutput, \
-    CogVideoXDecoder3D, CogVideoXEncoder3D
+from diffusers.models.autoencoders.autoencoder_kl_cogvideox import (
+    CogVideoXDecoder3D,
+    CogVideoXEncoder3D,
+    CogVideoXSafeConv3d,
+    DecoderOutput,
+)
 from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
 from diffusers.utils.accelerate_utils import apply_forward_hook
-from functorch.einops import rearrange
-from torch.multiprocessing import Process, Queue
-
 from x_base.utils.infer_info import infer_info
 from x_base.vae_parallelism.vae_mgr import (
-    parallel_spatial_tiled_decode, temporal_tiled_decode,
-    tiled_decode_parallel, tiled_encode_parallel
+    parallel_spatial_tiled_decode,
+    temporal_tiled_decode,
+    tiled_decode_parallel,
+    tiled_encode_parallel,
 )
-from x_base.vae_parallelism.utils import enable_lightning
 
 
 class AscendCogVideoXCausalConv3d(nn.Module):
@@ -40,13 +36,13 @@ class AscendCogVideoXCausalConv3d(nn.Module):
     """
 
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: Union[int, Tuple[int, int, int]],
-            stride: int = 1,
-            dilation: int = 1,
-            pad_mode: str = "constant",
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int | tuple[int, int, int],
+        stride: int = 1,
+        dilation: int = 1,
+        pad_mode: str = "constant",
     ):
         super().__init__()
 
@@ -79,7 +75,7 @@ class AscendCogVideoXCausalConv3d(nn.Module):
         )
 
     def fake_context_parallel_forward(
-            self, inputs: torch.Tensor, conv_cache: Optional[torch.Tensor] = None
+        self, inputs: torch.Tensor, conv_cache: torch.Tensor | None = None
     ) -> torch.Tensor:
         kernel_size = self.time_kernel_size
         if kernel_size > 1:
@@ -87,9 +83,9 @@ class AscendCogVideoXCausalConv3d(nn.Module):
             inputs = torch.cat(cached_inputs + [inputs], dim=2)
         return inputs
 
-    def forward(self, inputs: torch.Tensor, conv_cache: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, inputs: torch.Tensor, conv_cache: torch.Tensor | None = None) -> torch.Tensor:
         inputs = self.fake_context_parallel_forward(inputs, conv_cache)
-        conv_cache = inputs[:, :, -self.time_kernel_size + 1:].clone()
+        conv_cache = inputs[:, :, -self.time_kernel_size + 1 :].clone()
 
         padding_2d = (self.width_pad, self.width_pad, self.height_pad, self.height_pad)
         inputs = F.pad(inputs, padding_2d, mode="constant", value=0)
@@ -104,37 +100,37 @@ class AscendAutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMix
 
     @register_to_config
     def __init__(
-            self,
-            in_channels: int = 3,
-            out_channels: int = 3,
-            down_block_types: Tuple[str] = (
-                    "CogVideoXDownBlock3D",
-                    "CogVideoXDownBlock3D",
-                    "CogVideoXDownBlock3D",
-                    "CogVideoXDownBlock3D",
-            ),
-            up_block_types: Tuple[str] = (
-                    "CogVideoXUpBlock3D",
-                    "CogVideoXUpBlock3D",
-                    "CogVideoXUpBlock3D",
-                    "CogVideoXUpBlock3D",
-            ),
-            block_out_channels: Tuple[int] = (128, 256, 256, 512),
-            latent_channels: int = 16,
-            layers_per_block: int = 3,
-            act_fn: str = "silu",
-            norm_eps: float = 1e-6,
-            norm_num_groups: int = 32,
-            temporal_compression_ratio: float = 4,
-            sample_height: int = 480,
-            sample_width: int = 720,
-            scaling_factor: float = 1.15258426,
-            shift_factor: Optional[float] = None,
-            latents_mean: Optional[Tuple[float]] = None,
-            latents_std: Optional[Tuple[float]] = None,
-            force_upcast: float = True,
-            use_quant_conv: bool = False,
-            use_post_quant_conv: bool = False,
+        self,
+        in_channels: int = 3,
+        out_channels: int = 3,
+        down_block_types: tuple[str] = (
+            "CogVideoXDownBlock3D",
+            "CogVideoXDownBlock3D",
+            "CogVideoXDownBlock3D",
+            "CogVideoXDownBlock3D",
+        ),
+        up_block_types: tuple[str] = (
+            "CogVideoXUpBlock3D",
+            "CogVideoXUpBlock3D",
+            "CogVideoXUpBlock3D",
+            "CogVideoXUpBlock3D",
+        ),
+        block_out_channels: tuple[int] = (128, 256, 256, 512),
+        latent_channels: int = 16,
+        layers_per_block: int = 3,
+        act_fn: str = "silu",
+        norm_eps: float = 1e-6,
+        norm_num_groups: int = 32,
+        temporal_compression_ratio: float = 4,
+        sample_height: int = 480,
+        sample_width: int = 720,
+        scaling_factor: float = 1.15258426,
+        shift_factor: float | None = None,
+        latents_mean: tuple[float] | None = None,
+        latents_std: tuple[float] | None = None,
+        force_upcast: float = True,
+        use_quant_conv: bool = False,
+        use_post_quant_conv: bool = False,
     ):
         super().__init__()
 
@@ -172,8 +168,8 @@ class AscendAutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMix
         # If you decode X latent frames together, the number of output frames is:
         #     (X + (2 conv cache) + (2 time upscale_1) + (4 time upscale_2) - (2 causal conv downscale)) => X + 6 frames
         #
-        # It has been implemented this way so as to not have "magic values" in the code base that would be hard to explain. Note that
-        # setting it to anything other than 2 would give poor results because the VAE hasn't been trained to be adaptive with different
+        # It has been implemented this way so as to not have "magic values" in the code base that would be hard to explain. Note that  # noqa: E501
+        # setting it to anything other than 2 would give poor results because the VAE hasn't been trained to be adaptive with different  # noqa: E501
         # number of temporal frames.
         self.num_latent_frames_batch_size = 2
         self.num_sample_frames_batch_size = 8
@@ -204,15 +200,15 @@ class AscendAutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMix
         self.tile_overlap_factor = 0.25
 
     def _set_gradient_checkpointing(self, module, value=False):
-        if isinstance(module, (CogVideoXEncoder3D, CogVideoXDecoder3D)):
+        if isinstance(module, (CogVideoXEncoder3D, CogVideoXDecoder3D)):  # noqa: UP038
             module.gradient_checkpointing = value
 
     def enable_tiling(
-            self,
-            tile_sample_min_height: Optional[int] = None,
-            tile_sample_min_width: Optional[int] = None,
-            tile_overlap_factor_height: Optional[float] = None,
-            tile_overlap_factor_width: Optional[float] = None,
+        self,
+        tile_sample_min_height: int | None = None,
+        tile_sample_min_width: int | None = None,
+        tile_overlap_factor_height: float | None = None,
+        tile_overlap_factor_width: float | None = None,
     ) -> None:
         r"""
         Enable tiled VAE decoding. When this option is enabled, the VAE will split the input tensor into tiles to
@@ -270,7 +266,7 @@ class AscendAutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMix
             result = self._tiled_encode_parallel(self, x)
             return result
         frame_batch_size = self.num_sample_frames_batch_size
-        # Note: We expect the number of frames to be either `1` or `frame_batch_size * k` or `frame_batch_size * k + 1` for some k.
+        # Note: We expect the number of frames to be either `1` or `frame_batch_size * k` or `frame_batch_size * k + 1` for some k.  # noqa: E501
         # As the extra single frame is handled inside the loop, it is not required to round up here.
         num_batches = max(num_frames // frame_batch_size, 1)
         conv_cache = None
@@ -291,8 +287,8 @@ class AscendAutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMix
 
     @apply_forward_hook
     def encode(
-            self, x: torch.Tensor, return_dict: bool = True
-    ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
+        self, x: torch.Tensor, return_dict: bool = True
+    ) -> AutoencoderKLOutput | tuple[DiagonalGaussianDistribution]:
         """
         Encode a batch of images into latents.
 
@@ -317,13 +313,14 @@ class AscendAutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMix
             return (posterior,)
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+    def _decode(self, z: torch.Tensor, return_dict: bool = True) -> DecoderOutput | torch.Tensor:
         batch_size, num_channels, num_frames, height, width = z.shape
         sample_shape = (infer_info.frames, infer_info.height, infer_info.width)
         if self.use_tiling and (width > self.tile_latent_min_width or height > self.tile_latent_min_height):
             if self.lightning:
-                result = self.temporal_tiled_decode(z, return_dict=return_dict,
-                                                    sample_shape=sample_shape, save_path=infer_info.save_path)
+                result = self.temporal_tiled_decode(
+                    z, return_dict=return_dict, sample_shape=sample_shape, save_path=infer_info.save_path
+                )
             else:
                 result = self.tiled_decode_parallel(z, return_dict=return_dict)
             return result
@@ -350,7 +347,7 @@ class AscendAutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMix
         return DecoderOutput(sample=dec)
 
     @apply_forward_hook
-    def decode(self, z: torch.Tensor, return_dict: bool = True) -> Union[DecoderOutput, torch.Tensor]:
+    def decode(self, z: torch.Tensor, return_dict: bool = True) -> DecoderOutput | torch.Tensor:
         """
         Decode a batch of images.
 
@@ -402,12 +399,12 @@ class AscendAutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMix
         return enc
 
     def forward(
-            self,
-            sample: torch.Tensor,
-            sample_posterior: bool = False,
-            return_dict: bool = True,
-            generator: Optional[torch.Generator] = None,
-    ) -> Union[torch.Tensor, torch.Tensor]:
+        self,
+        sample: torch.Tensor,
+        sample_posterior: bool = False,
+        return_dict: bool = True,
+        generator: torch.Generator | None = None,
+    ) -> torch.Tensor | torch.Tensor:
         x = sample
         posterior = self.encode(x).latent_dist
         if sample_posterior:

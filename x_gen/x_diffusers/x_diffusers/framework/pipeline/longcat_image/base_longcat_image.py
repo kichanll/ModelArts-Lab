@@ -6,16 +6,14 @@ BaseLongCatImagePipelineMixin - LongCatImage Pipeline 共享逻辑基类
 """
 
 import numpy as np
-
 import torch
 import torch.distributed as dist
-from diffusers.utils import logging, is_torch_xla_available
-from diffusers.pipelines.longcat_image.pipeline_output import LongCatImagePipelineOutput
 from diffusers.pipelines.longcat_image.pipeline_longcat_image import (
     calculate_shift,
     retrieve_timesteps,
 )
-
+from diffusers.pipelines.longcat_image.pipeline_output import LongCatImagePipelineOutput
+from diffusers.utils import is_torch_xla_available, logging
 from x_base import get_cfg_group
 
 logger = logging.get_logger(__name__)
@@ -23,6 +21,7 @@ logger = logging.get_logger(__name__)
 
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm
+
     XLA_AVAILABLE = True
 else:
     XLA_AVAILABLE = False
@@ -45,10 +44,7 @@ class BaseLongCatImagePipelineMixin:
         device: torch.device,
     ) -> tuple[torch.Tensor, int, int]:
         """准备 timesteps"""
-        sigmas = (
-            np.linspace(1.0, 1.0 / num_inference_steps, num_inference_steps)
-            if sigmas is None else sigmas
-        )
+        sigmas = np.linspace(1.0, 1.0 / num_inference_steps, num_inference_steps) if sigmas is None else sigmas
         image_seq_len = latents.shape[1]
         mu = calculate_shift(
             image_seq_len,
@@ -58,11 +54,13 @@ class BaseLongCatImagePipelineMixin:
             self.scheduler.config.get("max_shift", 1.15),
         )
         timesteps, num_inference_steps = retrieve_timesteps(
-            self.scheduler, num_inference_steps, device, sigmas=sigmas, mu=mu,
+            self.scheduler,
+            num_inference_steps,
+            device,
+            sigmas=sigmas,
+            mu=mu,
         )
-        num_warmup_steps = max(
-            len(timesteps) - num_inference_steps * self.scheduler.order, 0
-        )
+        num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
         self._num_timesteps = len(timesteps)
         return timesteps, num_inference_steps, num_warmup_steps
 
@@ -106,17 +104,29 @@ class BaseLongCatImagePipelineMixin:
                 # CFG 非并行模式
                 if cfg_parallel_size == 1:
                     noise_pred = self._denoise_step_non_parallel(
-                        latent_model_input, timestep, prompt_embeds,
-                        negative_prompt_embeds, text_ids, negative_text_ids,
-                        latent_image_ids, enable_cfg_renorm, cfg_renorm_min,
+                        latent_model_input,
+                        timestep,
+                        prompt_embeds,
+                        negative_prompt_embeds,
+                        text_ids,
+                        negative_text_ids,
+                        latent_image_ids,
+                        enable_cfg_renorm,
+                        cfg_renorm_min,
                         image_seq_len,
                     )
                 # CFG 并行模式
                 else:
                     noise_pred = self._denoise_step_parallel(
-                        latent_model_input, timestep, prompt_embeds,
-                        text_ids, latent_image_ids, local_rank,
-                        enable_cfg_renorm, cfg_renorm_min, image_seq_len,
+                        latent_model_input,
+                        timestep,
+                        prompt_embeds,
+                        text_ids,
+                        latent_image_ids,
+                        local_rank,
+                        enable_cfg_renorm,
+                        cfg_renorm_min,
+                        image_seq_len,
                     )
 
                 # Scheduler step
@@ -126,9 +136,7 @@ class BaseLongCatImagePipelineMixin:
                     latents = latents.to(latents_dtype)
 
                 # 更新进度
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0
-                ):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
 
                 if XLA_AVAILABLE:
@@ -180,9 +188,7 @@ class BaseLongCatImagePipelineMixin:
                 if image_seq_len is not None:
                     noise_pred_uncond = noise_pred_uncond[:, :image_seq_len]
 
-            noise_pred = noise_pred_uncond + self.guidance_scale * (
-                noise_pred_text - noise_pred_uncond
-            )
+            noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
             # CFG renorm
             if enable_cfg_renorm:

@@ -1,7 +1,14 @@
-from diffusers import WanPipeline, WanImageToVideoPipeline, WanVACEPipeline, CogVideoXPipeline, \
-    HunyuanVideoPipeline, HunyuanVideoImageToVideoPipeline
-from .ten_second import WanVideoToVideoPipeline
+from diffusers import (
+    CogVideoXPipeline,
+    HunyuanVideoImageToVideoPipeline,
+    HunyuanVideoPipeline,
+    WanImageToVideoPipeline,
+    WanPipeline,
+    WanVACEPipeline,
+)
 from x_base import enable_sp, enable_vae_lightning
+
+from .ten_second import WanVideoToVideoPipeline
 
 WanPipeline.enable_sp = enable_sp
 WanImageToVideoPipeline.enable_sp = enable_sp

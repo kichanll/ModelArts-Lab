@@ -12,13 +12,13 @@ bypassing x_diffusers/__init__.py to avoid complex dependency mocking.
 No sys.modules mocking at module level - using fixtures instead.
 """
 
+import importlib.util
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock
+
 import pytest
 import torch
-import numpy as np
-import sys
-from unittest.mock import MagicMock
-from pathlib import Path
-import importlib.util
 
 
 @pytest.fixture(scope="module")
@@ -30,8 +30,11 @@ def pusa_scheduler_classes():
     # Save original modules
     saved_modules = {}
     modules_to_mock = [
-        "diffusers", "diffusers.configuration_utils", "diffusers.utils",
-        "diffusers.schedulers", "diffusers.schedulers.scheduling_utils"
+        "diffusers",
+        "diffusers.configuration_utils",
+        "diffusers.utils",
+        "diffusers.schedulers",
+        "diffusers.schedulers.scheduling_utils",
     ]
     for mod in modules_to_mock:
         if mod in sys.modules:
@@ -74,7 +77,9 @@ def pusa_scheduler_classes():
     sys.modules["diffusers.schedulers.scheduling_utils"] = mock_diffusers.schedulers.scheduling_utils
 
     # Load the module
-    _pusa_schedulers_path = Path(__file__).parent.parent.parent / "x_diffusers" / "framework" / "schedulers" / "pusa_schedulers.py"
+    _pusa_schedulers_path = (
+        Path(__file__).parent.parent.parent / "x_diffusers" / "framework" / "schedulers" / "pusa_schedulers.py"
+    )
     spec = importlib.util.spec_from_file_location("pusa_schedulers_module_test", _pusa_schedulers_path)
     pusa_schedulers_module = importlib.util.module_from_spec(spec)
     sys.modules["pusa_schedulers_module_test"] = pusa_schedulers_module
@@ -119,10 +124,10 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         assert scheduler.num_train_timesteps == 1000
         assert scheduler.shift == 3.0
         assert scheduler.sigma_max == 1.0
-        assert abs(scheduler.sigma_min - 0.003/1.002) < 1e-10
-        assert scheduler.inverse_timesteps == False
-        assert scheduler.extra_one_step == False
-        assert scheduler.reverse_sigmas == False
+        assert abs(scheduler.sigma_min - 0.003 / 1.002) < 1e-10
+        assert scheduler.inverse_timesteps == False  # noqa: E712
+        assert scheduler.extra_one_step == False  # noqa: E712
+        assert scheduler.reverse_sigmas == False  # noqa: E712
 
     def test_init_custom_parameters(self, pusa_scheduler_classes):
         """Test initialization with custom parameters."""
@@ -142,9 +147,9 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         assert scheduler.shift == 5.0
         assert scheduler.sigma_max == 2.0
         assert scheduler.sigma_min == 0.001
-        assert scheduler.inverse_timesteps == True
-        assert scheduler.extra_one_step == True
-        assert scheduler.reverse_sigmas == True
+        assert scheduler.inverse_timesteps == True  # noqa: E712
+        assert scheduler.extra_one_step == True  # noqa: E712
+        assert scheduler.reverse_sigmas == True  # noqa: E712
 
     def test_set_timesteps_default(self, pusa_scheduler_classes):
         """Test set_timesteps with default parameters."""
@@ -211,7 +216,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         scheduler = FlowMatchEulerDiscreteSchedulerPusa()
         scheduler.set_timesteps(num_inference_steps=50, training=True)
 
-        assert hasattr(scheduler, 'linear_timesteps_weights')
+        assert hasattr(scheduler, "linear_timesteps_weights")
         assert scheduler.linear_timesteps_weights is not None
         assert len(scheduler.linear_timesteps_weights) == 50
 
@@ -287,9 +292,11 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         noise_multipliers = {0: 0.5, 4: 0.8}
 
         prev_sample = scheduler.step(
-            model_output, timestep, sample,
+            model_output,
+            timestep,
+            sample,
             cond_frame_latent_indices=cond_frame_latent_indices,
-            noise_multipliers=noise_multipliers
+            noise_multipliers=noise_multipliers,
         )
 
         assert isinstance(prev_sample, torch.Tensor)
@@ -317,9 +324,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         noise = torch.randn(2, 3, 4, 4)
         timestep = scheduler.timesteps[5].unsqueeze(0)
 
-        noisy_samples = scheduler.add_noise_for_conditioning_frames(
-            original_samples, noise, timestep
-        )
+        noisy_samples = scheduler.add_noise_for_conditioning_frames(original_samples, noise, timestep)
 
         assert isinstance(noisy_samples, torch.Tensor)
         assert noisy_samples.shape == original_samples.shape
@@ -371,9 +376,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         noise = torch.ones(2, 3, 4, 4)
         timestep = scheduler.timesteps[5].unsqueeze(0)
 
-        noisy_samples = scheduler.add_noise_for_conditioning_frames(
-            original_samples, noise, timestep
-        )
+        noisy_samples = scheduler.add_noise_for_conditioning_frames(original_samples, noise, timestep)
 
         # Verify the formula: (1-sigma)*original + sigma*noise
         # With original=0, noise=1, result should be sigma
@@ -395,7 +398,7 @@ class TestFlowMatchEulerDiscreteSchedulerPusa:
         """Test that _compatibles attribute exists."""
         FlowMatchEulerDiscreteSchedulerPusa, _ = pusa_scheduler_classes
         scheduler = FlowMatchEulerDiscreteSchedulerPusa()
-        assert hasattr(scheduler, '_compatibles')
+        assert hasattr(scheduler, "_compatibles")
         assert scheduler._compatibles == []
 
 
@@ -409,7 +412,7 @@ class TestSchedulerIntegration:
 
         # Start with a noisy sample
         sample = torch.randn(2, 3, 4, 4)
-        initial_variance = sample.var().item()
+        initial_variance = sample.var().item()  # noqa: F841
 
         for i in range(5):
             timestep = scheduler.timesteps[9 - i]

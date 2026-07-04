@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# coding=utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,12 +15,11 @@
 
 
 import math
-from typing import Any
 
 import torch
-from torch import Tensor
-from einops import rearrange
 from diffusers.utils import logging
+from einops import rearrange
+from torch import Tensor
 
 logger = logging.get_logger("attention")
 
@@ -40,10 +38,10 @@ USE_LA = True
 
 class Rainfusion(torch.nn.Module):
     def __init__(
-            self,
-            grid_size: list,
-            skip_timesteps: int = 0,
-            sparsity: float = 0.64,
+        self,
+        grid_size: list,
+        skip_timesteps: int = 0,
+        sparsity: float = 0.64,
     ) -> None:
         """
         参数:
@@ -53,26 +51,23 @@ class Rainfusion(torch.nn.Module):
         """
         super().__init__()
         if not isinstance(grid_size, list):
-            raise ParametersInvalid(
-                f"The data type of input grid_size must be list, but got {type(grid_size)}.")
+            raise ParametersInvalid(f"The data type of input grid_size must be list, but got {type(grid_size)}.")
         if not isinstance(skip_timesteps, int):
             raise ParametersInvalid(
-                f"The data type of input skip_timesteps must be int, but got {type(skip_timesteps)}.")
+                f"The data type of input skip_timesteps must be int, but got {type(skip_timesteps)}."
+            )
         if not isinstance(sparsity, float):
-            raise ParametersInvalid(
-                f"The data type of input sparsity must be float, but got {type(sparsity)}.")
+            raise ParametersInvalid(f"The data type of input sparsity must be float, but got {type(sparsity)}.")
         if skip_timesteps < 0:
-            raise ParametersInvalid(
-                f"The data type of input skip_timesteps must >= 0 , but got {skip_timesteps}.")
+            raise ParametersInvalid(f"The data type of input skip_timesteps must >= 0 , but got {skip_timesteps}.")
         if sparsity < 0.0 or sparsity > 1.0:
-            raise ParametersInvalid(
-                f"The data type of input sparsity value must in [0.0, 1.0] , but got {sparsity}.")
+            raise ParametersInvalid(f"The data type of input sparsity value must in [0.0, 1.0] , but got {sparsity}.")
 
         # Rainfusion_param
         self.grid_size = grid_size
         self.skip_timesteps = skip_timesteps
         self.bandwidth = Rainfusion.cal_bandwidth(sparsity)
-        self.use_rainfusion = False if math.isclose(sparsity, 1.0, rel_tol=1e-5) else True
+        self.use_rainfusion = False if math.isclose(sparsity, 1.0, rel_tol=1e-5) else True  # noqa: SIM211
         self.use_la = USE_LA
 
         self.layout_transform = True
@@ -82,6 +77,7 @@ class Rainfusion(torch.nn.Module):
 
         if not self.use_la:
             import torch_atb
+
             self_attention_param = torch_atb.SelfAttentionParam()
             self_attention_param.head_num = 1
             self_attention_param.kv_head_num = 1
@@ -123,6 +119,7 @@ class Rainfusion(torch.nn.Module):
 
     def get_rainfusion_fa(self, bandwidth, head_dim, text_len):
         import torch_atb
+
         rfa_param_local = torch_atb.RazorFusionAttentionParam()
         rfa_param_local.head_num = 1
         rfa_param_local.kv_head_num = 1
@@ -163,68 +160,76 @@ class Rainfusion(torch.nn.Module):
 
     def get_recall_ratio(self, query_layer, key_layer, atten_mask, seq_len, head_num, head_dim, global_step):
         ratio_local = self.cal_mask_recall(
-            query_layer[:, :, :seq_len, :],
-            key_layer[:, :, :seq_len, :],
-            head_num, head_dim, atten_mask
+            query_layer[:, :, :seq_len, :], key_layer[:, :, :seq_len, :], head_num, head_dim, atten_mask
         )
         ratio_global = self.cal_mask_recall(
-            query_layer[:, :, :self.num_tokens_except_first_frame, :][:, :, ::global_step, :],
-            key_layer[:, :, :self.num_tokens_except_first_frame, :][:, :, ::global_step, :],
-            head_num, head_dim, atten_mask
+            query_layer[:, :, : self.num_tokens_except_first_frame, :][:, :, ::global_step, :],
+            key_layer[:, :, : self.num_tokens_except_first_frame, :][:, :, ::global_step, :],
+            head_num,
+            head_dim,
+            atten_mask,
         )
         return ratio_local, ratio_global
 
     def rearrange_to_global(self, query_in, key_in, value_in, text_len):
         query_in_img = query_in[:, :-text_len, :, :]
         query_in_txt = query_in[:, -text_len:, :, :]
-        query_in_img = rearrange(query_in_img, \
-                                 'b (t h1 w) n h -> b (h1 w t) n h', \
-                                 t=self.grid_size[0] - 1, h1=self.grid_size[1], w=self.grid_size[2])
+        query_in_img = rearrange(
+            query_in_img,
+            "b (t h1 w) n h -> b (h1 w t) n h",
+            t=self.grid_size[0] - 1,
+            h1=self.grid_size[1],
+            w=self.grid_size[2],
+        )
         query_in = torch.cat([query_in_img, query_in_txt], 1)
 
         key_in_img = key_in[:, :-text_len, :, :]
         key_in_txt = key_in[:, -text_len:, :, :]
-        key_in_img = rearrange(key_in_img, \
-                               'b (t h1 w) n h -> b (h1 w t) n h', \
-                               t=self.grid_size[0] - 1, h1=self.grid_size[1], w=self.grid_size[2])
+        key_in_img = rearrange(
+            key_in_img,
+            "b (t h1 w) n h -> b (h1 w t) n h",
+            t=self.grid_size[0] - 1,
+            h1=self.grid_size[1],
+            w=self.grid_size[2],
+        )
         key_in = torch.cat([key_in_img, key_in_txt], 1)
 
         value_in_img = value_in[:, :-text_len, :, :]
         value_in_txt = value_in[:, -text_len:, :, :]
-        value_in_img = rearrange(value_in_img, \
-                                 'b (t h1 w) n h -> b (h1 w t) n h', \
-                                 t=self.grid_size[0] - 1, h1=self.grid_size[1], w=self.grid_size[2])
+        value_in_img = rearrange(
+            value_in_img,
+            "b (t h1 w) n h -> b (h1 w t) n h",
+            t=self.grid_size[0] - 1,
+            h1=self.grid_size[1],
+            w=self.grid_size[2],
+        )
         value_in = torch.cat([value_in_img, value_in_txt], 1)
 
         return query_in, key_in, value_in
 
     def check_input(
-            self,
-            query: Tensor,
-            key: Tensor,
-            value: Tensor,
-            atten_mask_all: Tensor,
-            text_len: int = 0,
-            t_idx: int = 0,
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        atten_mask_all: Tensor,
+        text_len: int = 0,
+        t_idx: int = 0,
     ):
         if not isinstance(query, torch.Tensor):
-            raise ParametersInvalid(
-                f"The data type of input query must be torch.Tensor, but got {type(query)}.")
+            raise ParametersInvalid(f"The data type of input query must be torch.Tensor, but got {type(query)}.")
         if not isinstance(key, torch.Tensor):
-            raise ParametersInvalid(
-                f"The data type of input key must be torch.Tensor, but got {type(key)}.")
+            raise ParametersInvalid(f"The data type of input key must be torch.Tensor, but got {type(key)}.")
         if not isinstance(value, torch.Tensor):
-            raise ParametersInvalid(
-                f"The data type of input value must be torch.Tensor, but got {type(value)}.")
+            raise ParametersInvalid(f"The data type of input value must be torch.Tensor, but got {type(value)}.")
         if not isinstance(atten_mask_all, list):
             raise ParametersInvalid(
-                f"The data type of input atten_mask_all must be list, but got {type(atten_mask_all)}.")
+                f"The data type of input atten_mask_all must be list, but got {type(atten_mask_all)}."
+            )
         if text_len < 0:
-            raise ParametersInvalid(
-                f"The data type of input text_len must >= 0 , but got {text_len}.")
+            raise ParametersInvalid(f"The data type of input text_len must >= 0 , but got {text_len}.")
         if t_idx < 0:
-            raise ParametersInvalid(
-                f"The data type of input t_idx must >= 0 , but got {t_idx}.")
+            raise ParametersInvalid(f"The data type of input t_idx must >= 0 , but got {t_idx}.")
 
     def forward_rainfusion_attention(self, ratio_local, ratio_global, query_in, key_in, value_in, text_len):
         use_local = False
@@ -237,30 +242,34 @@ class Rainfusion(torch.nn.Module):
         if self.layout_transform and use_local:
             query_in, key_in, value_in = self.rearrange_to_global(query_in, key_in, value_in, text_len)
 
-        query_in = rearrange(query_in, 'b s n h -> (b s n) h')
-        key_in = rearrange(key_in, 'b s n h -> (b s n) h')
-        value_in = rearrange(value_in, 'b s n h -> (b s n) h')
+        query_in = rearrange(query_in, "b s n h -> (b s n) h")
+        key_in = rearrange(key_in, "b s n h -> (b s n) h")
+        value_in = rearrange(value_in, "b s n h -> (b s n) h")
         torch.npu.synchronize()
         out = atten_func.forward([query_in, key_in, value_in])[0]
         torch.npu.synchronize()
-        out = rearrange(out, '(b s n) h -> b s n h', b=1, n=1)
+        out = rearrange(out, "(b s n) h -> b s n h", b=1, n=1)
         if self.layout_transform and use_local:
             out_img = out[:, :-text_len, :, :]
             out_txt = out[:, -text_len:, :, :]
-            out_img = rearrange(out_img, \
-                                'b (h1 w t) n h -> b (t h1 w) n h', \
-                                t=self.grid_size[0] - 1, h1=self.grid_size[1], w=self.grid_size[2])
+            out_img = rearrange(
+                out_img,
+                "b (h1 w t) n h -> b (t h1 w) n h",
+                t=self.grid_size[0] - 1,
+                h1=self.grid_size[1],
+                w=self.grid_size[2],
+            )
             out = torch.cat([out_img, out_txt], 1)
         return out
 
     def forward(
-            self,
-            query: Tensor,
-            key: Tensor,
-            value: Tensor,
-            atten_mask_all: Tensor,
-            text_len: int = 0,
-            t_idx: int = 0,
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        atten_mask_all: Tensor,
+        text_len: int = 0,
+        t_idx: int = 0,
     ) -> Tensor:
         """
         参数:
@@ -285,14 +294,14 @@ class Rainfusion(torch.nn.Module):
             value = value[:, :grid_seqlen, :, :]
 
         query_layer = torch.cat(
-            [query[:, self.num_tokens_per_frame:, :, :], query[:, :self.num_tokens_per_frame, :, :]], dim=1
+            [query[:, self.num_tokens_per_frame :, :, :], query[:, : self.num_tokens_per_frame, :, :]], dim=1
         )
         key_layer = torch.cat(
-            [key[:, self.num_tokens_per_frame:, :, :], key[:, :self.num_tokens_per_frame, :, :]], dim=1
+            [key[:, self.num_tokens_per_frame :, :, :], key[:, : self.num_tokens_per_frame, :, :]], dim=1
         )
         value_layer = torch.cat(
-            [value[:, self.num_tokens_per_frame:, :, :], value[:, :self.num_tokens_per_frame, :, :]],
-            dim=1)
+            [value[:, self.num_tokens_per_frame :, :, :], value[:, : self.num_tokens_per_frame, :, :]], dim=1
+        )
         if self.use_rainfusion and t_idx > self.skip_timesteps:
             atten_mask = atten_mask_all[0]
             global_step = self.num_frames - 1
@@ -300,9 +309,7 @@ class Rainfusion(torch.nn.Module):
             text_len = text_len + self.num_tokens_per_frame
 
             self.local_attention, self.global_attention = self.get_rainfusion_fa(
-                bandwidth=self.bandwidth,
-                head_dim=d,
-                text_len=text_len
+                bandwidth=self.bandwidth, head_dim=d, text_len=text_len
             )
             ratio_list, ratio_list_2 = self.get_recall_ratio(
                 query_layer.transpose(1, 2),
@@ -311,7 +318,7 @@ class Rainfusion(torch.nn.Module):
                 seq_len=seq_len,
                 head_num=1,
                 head_dim=d,
-                global_step=global_step
+                global_step=global_step,
             )
 
         if self.use_la or (self.use_rainfusion and t_idx > self.skip_timesteps):
@@ -328,13 +335,18 @@ class Rainfusion(torch.nn.Module):
             if self.use_rainfusion and t_idx > self.skip_timesteps:
                 ratio_local, ratio_global = ratio_list[i], ratio_list_2[i]
                 out = self.forward_rainfusion_attention(
-                    ratio_local, ratio_global,
-                    query_layer_list[i], key_layer_list[i], value_layer_list[i],
-                    text_len)
+                    ratio_local, ratio_global, query_layer_list[i], key_layer_list[i], value_layer_list[i], text_len
+                )
             else:
                 if self.use_la:
-                    out = attention_forward(query_layer_list[i], key_layer_list[i], value_layer_list[i],
-                                            opt_mode="manual", op_type="ascend_laser_attention", layout="BNSD")
+                    out = attention_forward(
+                        query_layer_list[i],
+                        key_layer_list[i],
+                        value_layer_list[i],
+                        opt_mode="manual",
+                        op_type="ascend_laser_attention",
+                        layout="BNSD",
+                    )
                 else:
                     seqlen = torch.tensor([[query_layer.shape[1]], [key_layer.shape[1]]], dtype=torch.int32)
                     intensors = [query_layer_list[i], key_layer_list[i], value_layer_list[i], seqlen]
@@ -343,9 +355,7 @@ class Rainfusion(torch.nn.Module):
                     torch.npu.synchronize()
             output.append(out)
         out = torch.cat(output, dim=2)
-        out = torch.cat(
-            [out[:, -self.num_tokens_per_frame:, :, :], out[:, :-self.num_tokens_per_frame, :, :]], dim=1
-        )
+        out = torch.cat([out[:, -self.num_tokens_per_frame :, :, :], out[:, : -self.num_tokens_per_frame, :, :]], dim=1)
         if s > grid_seqlen:
             out = torch.cat([out, out.new_zeros(b, s - grid_seqlen, n, d)], dim=1)
         return out

@@ -3,15 +3,15 @@ CogVideoX 模型 Cache 加速实现
 
 包含 TeaCache 加速策略的前向传播实现。
 """
-from typing import Dict, Union, Any, Optional, Tuple
+
 import os
+from typing import Any
 
 import numpy as np
 import torch
 from diffusers.utils import is_torch_version
-from diffusers.models.modeling_outputs import Transformer2DModelOutput
 
-from ..utils import pre_forward, cogvideox_pre_forward, cogvideox_post_forward
+from ..utils import cogvideox_post_forward, cogvideox_pre_forward
 
 # 环境变量配置
 REL_L1_THRESH = float(os.getenv("REL_L1_THRESH", 0.12))
@@ -22,33 +22,41 @@ def teacache_cogvideox_forward(
     self,
     hidden_states: torch.Tensor,
     encoder_hidden_states: torch.Tensor,
-    timestep: Union[int, float, torch.LongTensor],
-    timestep_cond: Optional[torch.Tensor] = None,
-    ofs: Optional[Union[int, float, torch.LongTensor]] = None,
-    image_rotary_emb: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-    attention_kwargs: Optional[Dict[str, Any]] = None,
+    timestep: int | float | torch.LongTensor,
+    timestep_cond: torch.Tensor | None = None,
+    ofs: int | float | torch.LongTensor | None = None,
+    image_rotary_emb: tuple[torch.Tensor, torch.Tensor] | None = None,
+    attention_kwargs: dict[str, Any] | None = None,
     return_dict: bool = True,
 ):
     """CogVideoX TeaCache 前向传播"""
-    lora_scale, hidden_states, encoder_hidden_states, emb, batch_size, \
-        num_frames, height, width, text_seq_length = cogvideox_pre_forward(
-            self, hidden_states, encoder_hidden_states, timestep,
-            timestep_cond, ofs, attention_kwargs
+    lora_scale, hidden_states, encoder_hidden_states, emb, batch_size, num_frames, height, width, text_seq_length = (
+        cogvideox_pre_forward(
+            self, hidden_states, encoder_hidden_states, timestep, timestep_cond, ofs, attention_kwargs
         )
+    )
 
     # TeaCache 核心逻辑
     should_calc = _teacache_should_calc(self, emb)
 
     # 执行 transformer blocks
     hidden_states, encoder_hidden_states = _teacache_imple(
-        self, hidden_states, encoder_hidden_states, should_calc,
-        emb, image_rotary_emb
+        self, hidden_states, encoder_hidden_states, should_calc, emb, image_rotary_emb
     )
 
     # 后置处理
     output = cogvideox_post_forward(
-        self, hidden_states, encoder_hidden_states, emb, batch_size,
-        num_frames, height, width, text_seq_length, lora_scale, return_dict
+        self,
+        hidden_states,
+        encoder_hidden_states,
+        emb,
+        batch_size,
+        num_frames,
+        height,
+        width,
+        text_seq_length,
+        lora_scale,
+        return_dict,
     )
 
     return output
@@ -64,8 +72,11 @@ def _teacache_should_calc(self, emb):
         else:
             rescale_func = np.poly1d(self.coefficients)
 
-            rel_diff = ((emb - self.previous_modulated_input).abs().mean()
-                       / self.previous_modulated_input.abs().mean()).cpu().item()
+            rel_diff = (
+                ((emb - self.previous_modulated_input).abs().mean() / self.previous_modulated_input.abs().mean())
+                .cpu()
+                .item()
+            )
             self.accumulated_rel_l1_distance += rescale_func(rel_diff)
 
             if self.accumulated_rel_l1_distance < self.rel_l1_thresh:
@@ -84,8 +95,7 @@ def _teacache_should_calc(self, emb):
     return should_calc
 
 
-def _teacache_imple(self, hidden_states, encoder_hidden_states, should_calc,
-                    emb, image_rotary_emb):
+def _teacache_imple(self, hidden_states, encoder_hidden_states, should_calc, emb, image_rotary_emb):
     """执行 CogVideoX transformer blocks"""
     if self.enable_teacache:
         if not should_calc:
@@ -131,12 +141,14 @@ def _teacache_imple(self, hidden_states, encoder_hidden_states, should_calc,
 
 def _checkpoint_block(block, hidden_states, encoder_hidden_states, emb, image_rotary_emb):
     """Gradient checkpointing wrapper for transformer block"""
+
     def create_custom_forward(module):
         def custom_forward(*inputs):
             return module(*inputs)
+
         return custom_forward
 
-    ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
+    ckpt_kwargs: dict[str, Any] = {"use_reentrant": False} if is_torch_version(">=", "1.11.0") else {}
     return torch.utils.checkpoint.checkpoint(
         create_custom_forward(block),
         hidden_states,
@@ -181,7 +193,7 @@ def _infer_cogvideox_model_key(args) -> str:
     Returns:
         配置文件中的模型键，如 "CogVideoX-2b", "CogVideoX1.5-5B-I2V"
     """
-    model = args.model.lower() if hasattr(args, 'model') else ""
+    model = args.model.lower() if hasattr(args, "model") else ""
 
     # CogVideoX 1.5 系列
     if "1.5" in model:

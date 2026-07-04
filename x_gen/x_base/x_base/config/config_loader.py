@@ -3,12 +3,12 @@
 
 提供 YAML 配置文件的统一加载、缓存和访问接口。
 """
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Tuple, Type
+
 import fnmatch
 import logging
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
-import torch
 from torch import nn
 from torch.distributed.fsdp.fully_sharded_data_parallel import FullyShardedDataParallel as FSDP
 
@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 
 class ConfigLoadError(Exception):
     """配置加载异常"""
+
     pass
 
 
-def _load_yaml_config(config_filename: str) -> Dict[str, Any]:
+def _load_yaml_config(config_filename: str) -> dict[str, Any]:
     """加载 YAML 配置文件（内部函数）
 
     Args:
@@ -32,8 +33,9 @@ def _load_yaml_config(config_filename: str) -> Dict[str, Any]:
     Raises:
         ConfigLoadError: 配置文件不存在或解析失败
     """
-    import yaml
     from importlib import resources
+
+    import yaml
 
     try:
         # Python 3.9+
@@ -42,10 +44,12 @@ def _load_yaml_config(config_filename: str) -> Dict[str, Any]:
             return yaml.safe_load(f)
     except (AttributeError, TypeError):
         # Python 3.7-3.8 兼容
-        import x_base.config as config_module
         import os
+
+        import x_base.config as config_module
+
         config_path = os.path.join(os.path.dirname(config_module.__file__), config_filename)
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             return yaml.safe_load(f)
     except FileNotFoundError as e:
         raise ConfigLoadError(f"Config file not found: {config_filename}") from e
@@ -54,10 +58,10 @@ def _load_yaml_config(config_filename: str) -> Dict[str, Any]:
 
 
 # ============ 配置缓存 ============
-_config_cache: Dict[str, Dict[str, Any]] = {}
+_config_cache: dict[str, dict[str, Any]] = {}
 
 
-def get_config(config_name: str, reload: bool = False) -> Dict[str, Any]:
+def get_config(config_name: str, reload: bool = False) -> dict[str, Any]:
     """获取配置（带缓存）
 
     Args:
@@ -77,7 +81,7 @@ def get_config(config_name: str, reload: bool = False) -> Dict[str, Any]:
     return config
 
 
-def load_cache_config() -> Dict[str, Any]:
+def load_cache_config() -> dict[str, Any]:
     """加载 Cache 配置（向后兼容接口）
 
     Returns:
@@ -86,7 +90,7 @@ def load_cache_config() -> Dict[str, Any]:
     return get_config("cache_config")
 
 
-def load_quant_config() -> Dict[str, Any]:
+def load_quant_config() -> dict[str, Any]:
     """加载量化配置
 
     Returns:
@@ -109,15 +113,16 @@ class QuantLayerConfig:
         w4a4_patterns: w4a4 量化模块选择模式（匹配这些层名使用 w4a4 模块）
         w4a4_block_patterns: w4a4 模块的 block 限制（必须同时匹配）
     """
-    include_patterns: Optional[List[str]] = None
-    exclude_patterns: List[str] = field(default_factory=list)
-    layer_types: List[str] = field(default_factory=lambda: ["Linear"])
+
+    include_patterns: list[str] | None = None
+    exclude_patterns: list[str] = field(default_factory=list)
+    layer_types: list[str] = field(default_factory=lambda: ["Linear"])
     # w4a4 量化模块选择配置
-    w4a4_patterns: List[str] = field(default_factory=lambda: ["to_k", "to_v", "to_q", "to_out", "proj"])
-    w4a4_block_patterns: List[str] = field(default_factory=lambda: ["blocks"])
+    w4a4_patterns: list[str] = field(default_factory=lambda: ["to_k", "to_v", "to_q", "to_out", "proj"])
+    w4a4_block_patterns: list[str] = field(default_factory=lambda: ["blocks"])
 
     # 层类型映射（不参与 dataclass 的 __init__、__repr__、__eq__）
-    _layer_type_map: Dict[str, Type[nn.Module]] = field(
+    _layer_type_map: dict[str, type[nn.Module]] = field(
         default_factory=lambda: {
             "Linear": nn.Linear,
             "Conv2d": nn.Conv2d,
@@ -127,7 +132,7 @@ class QuantLayerConfig:
         compare=False,
     )
 
-    _parsed_layer_types: Tuple[Type[nn.Module], ...] = field(
+    _parsed_layer_types: tuple[type[nn.Module], ...] = field(
         default_factory=tuple,
         repr=False,
         compare=False,
@@ -136,13 +141,10 @@ class QuantLayerConfig:
 
     def __post_init__(self):
         """后处理：解析层类型"""
-        self._parsed_layer_types = tuple(
-            self._layer_type_map.get(lt, nn.Linear)
-            for lt in self.layer_types
-        )
+        self._parsed_layer_types = tuple(self._layer_type_map.get(lt, nn.Linear) for lt in self.layer_types)
 
     @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "QuantLayerConfig":
+    def from_dict(cls, config_dict: dict[str, Any]) -> "QuantLayerConfig":
         """从字典创建配置实例
 
         Args:
@@ -202,7 +204,7 @@ class QuantLayerConfig:
         return matches_w4a4 and matches_block
 
     @staticmethod
-    def _matches_patterns(name: str, patterns: List[str]) -> bool:
+    def _matches_patterns(name: str, patterns: list[str]) -> bool:
         """检查名称是否匹配任一模式
 
         支持：
@@ -216,7 +218,7 @@ class QuantLayerConfig:
         Returns:
             True 表示匹配
         """
-        for pattern in patterns:
+        for pattern in patterns:  # noqa: SIM110
             if fnmatch.fnmatch(name, pattern) or pattern in name:
                 return True
         return False
@@ -251,9 +253,9 @@ class QuantConfigManager:
         if self._initialized:
             return
 
-        self._config: Dict[str, Any] = load_quant_config()
-        self._model_mapping: Dict[str, str] = self._config.get("model_type_mapping", {})
-        self._configs: Dict[str, QuantLayerConfig] = {}
+        self._config: dict[str, Any] = load_quant_config()
+        self._model_mapping: dict[str, str] = self._config.get("model_type_mapping", {})
+        self._configs: dict[str, QuantLayerConfig] = {}
         self._initialized = True
 
     def reload(self):
@@ -274,7 +276,7 @@ class QuantConfigManager:
         if config_name not in self._configs:
             config_dict = self._config.get(config_name)
             if config_dict is None:
-                logger.warning(f"Quant config '{config_name}' not found, using default")
+                logger.warning(f"Quant config '{config_name}' not found, using default")  # noqa: G004
                 config_dict = self._config.get("default", {})
             self._configs[config_name] = QuantLayerConfig.from_dict(config_dict)
 
@@ -346,8 +348,8 @@ class OffloadConfigManager:
         if self._initialized:
             return
 
-        self._config: Dict[str, Any] = get_config("offload_config")
-        self._block_mapping: Dict[str, str] = self._config.get("transformer_block_mapping", {})
+        self._config: dict[str, Any] = get_config("offload_config")
+        self._block_mapping: dict[str, str] = self._config.get("transformer_block_mapping", {})
         self._initialized = True
 
     def reload(self):
@@ -401,8 +403,10 @@ quant_config_manager = QuantConfigManager()
 # OffloadConfigManager全局单例
 offload_config_manager = OffloadConfigManager()
 
-#cache_dit配置
+# cache_dit配置
 CACHE_DIT_CONFIG = get_config(config_name="cache_dit_config", reload=True)["DBCache_config"]
 
-#qwen lora scheduler配置
-QWEN_LORA_SCHEDULER_CONFIG = get_config(config_name="pipeline_scheduler_config", reload=True)["qwen_lora_scheduler_config"]
+# qwen lora scheduler配置
+QWEN_LORA_SCHEDULER_CONFIG = get_config(config_name="pipeline_scheduler_config", reload=True)[
+    "qwen_lora_scheduler_config"
+]

@@ -1,34 +1,37 @@
-import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
 
-import numpy as np
 import torch
-
 from diffusers.configuration_utils import ConfigMixin, register_to_config
-from diffusers.utils import BaseOutput, is_scipy_available, logging
 from diffusers.schedulers.scheduling_utils import SchedulerMixin
-
+from diffusers.utils import BaseOutput, is_scipy_available, logging
 
 if is_scipy_available():
-    import scipy.stats
+    pass
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
 @dataclass
 class FlowMatchEulerDiscreteSchedulerOutput(BaseOutput):
-
     prev_sample: torch.FloatTensor
 
 
 class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
-
     _compatibles = []
     order = 1
 
     @register_to_config
-    def __init__(self, num_inference_steps=100, num_train_timesteps=1000, shift=3.0, sigma_max=1.0, sigma_min=0.003/1.002, inverse_timesteps=False, extra_one_step=False, reverse_sigmas=False):
+    def __init__(
+        self,
+        num_inference_steps=100,
+        num_train_timesteps=1000,
+        shift=3.0,
+        sigma_max=1.0,
+        sigma_min=0.003 / 1.002,
+        inverse_timesteps=False,
+        extra_one_step=False,
+        reverse_sigmas=False,
+    ):
         self.num_train_timesteps = num_train_timesteps
         self.shift = shift
         self.sigma_max = sigma_max
@@ -37,7 +40,6 @@ class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
         self.extra_one_step = extra_one_step
         self.reverse_sigmas = reverse_sigmas
         self.set_timesteps(num_inference_steps)
-
 
     def set_timesteps(self, num_inference_steps=100, denoising_strength=1.0, training=False, shift=None):
         if shift is not None:
@@ -62,7 +64,16 @@ class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
             bsmntw_weighing = y_shifted * (num_inference_steps / y_shifted.sum())
             self.linear_timesteps_weights = bsmntw_weighing
 
-    def step(self, model_output, timestep, sample, to_final=False, cond_frame_latent_indices=None, noise_multipliers=None, **kwargs):
+    def step(
+        self,
+        model_output,
+        timestep,
+        sample,
+        to_final=False,
+        cond_frame_latent_indices=None,
+        noise_multipliers=None,
+        **kwargs,
+    ):
         if isinstance(timestep, torch.Tensor):
             self.timesteps = self.timesteps.to(timestep.device)
             self.sigmas = self.sigmas.to(timestep.device)
@@ -97,20 +108,22 @@ class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
 
             if cond_frame_latent_indices is not None and noise_multipliers is not None:
                 for latent_idx in cond_frame_latent_indices:
-                    if timestep_full[:,latent_idx] == 0:
-                        sigma[:,:,latent_idx] = 0
+                    if timestep_full[:, latent_idx] == 0:
+                        sigma[:, :, latent_idx] = 0
                         sigma_[latent_idx] = 0
                         continue
                     multiplier = noise_multipliers.get(latent_idx, 1.0)
-                    sigma[:,:,latent_idx] = sigma[:,:,latent_idx] * multiplier # timestep = sigma * 1000, equivalent, so directly use multiplier here
+                    sigma[:, :, latent_idx] = (
+                        sigma[:, :, latent_idx] * multiplier
+                    )  # timestep = sigma * 1000, equivalent, so directly use multiplier here
                     sigma_[latent_idx] = sigma_[latent_idx] * multiplier
 
             sigma_ = sigma_.unsqueeze(0).unsqueeze(1).unsqueeze(3).unsqueeze(4).to(sample.device)
 
             if torch.any(timestep_full == 0):
                 zero_indices = torch.where(timestep == 0)[1].to(torch.long)
-                sigma[:,:,zero_indices] = 0
-                sigma_[:,:,zero_indices] = 0
+                sigma[:, :, zero_indices] = 0
+                sigma_[:, :, zero_indices] = 0
 
             prev_sample = sample + model_output * (sigma_ - sigma)
 
@@ -125,8 +138,10 @@ class FlowMatchEulerDiscreteSchedulerPusa(SchedulerMixin, ConfigMixin):
             sigma = self.sigmas[timestep_id]
         else:
             timestep_id = torch.argmin((self.timesteps.unsqueeze(1) - timestep).abs(), dim=0)
-            sigma = self.sigmas[timestep_id].unsqueeze(0).unsqueeze(1).unsqueeze(3).unsqueeze(4).to(original_samples.device)
-            sigma= sigma * noise_multiplier # timestep = sigma * 1000, equivalent, so directly use multiplier here
+            sigma = (
+                self.sigmas[timestep_id].unsqueeze(0).unsqueeze(1).unsqueeze(3).unsqueeze(4).to(original_samples.device)
+            )
+            sigma = sigma * noise_multiplier  # timestep = sigma * 1000, equivalent, so directly use multiplier here
 
         sample = (1 - sigma) * original_samples + sigma * noise
 

@@ -1,24 +1,27 @@
 """
 Integration tests for x_diffusers.framework.transformer.hunyuan module with NPU mocking.
 """
+
+import sys
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
 import torch
-import sys
-from unittest.mock import MagicMock, patch, Mock
 
-from tests.conftest import (
-    MockNPUModule, MockAttentionManager, MockRopeManager, MockParallelManager
-)
+from tests.conftest import MockAttentionManager, MockNPUModule, MockParallelManager, MockRopeManager
 
 
 def mock_gather_sequence(tensor, dim=2, group=None):
     return tensor
 
+
 def mock_split_sequence(tensor, dim=2, group=None):
     return tensor
 
+
 def mock_all_to_all_before_attn(tensor, group, scatter_dim=2, gather_dim=1):
     return tensor
+
 
 def mock_all_to_all_after_attn(tensor, group, scatter_dim=1, gather_dim=2):
     return tensor
@@ -30,7 +33,7 @@ class TestHunyuanVideoAttnProcessorWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
@@ -44,10 +47,10 @@ class TestHunyuanVideoAttnProcessorWithMock:
         mock_x_base.get_pad = Mock(return_value=0)
         mock_x_base.set_pad = Mock()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
-        self.torch_npu_patcher = patch.object(torch, 'npu', MockNPUModule())
+        self.torch_npu_patcher = patch.object(torch, "npu", MockNPUModule())
         self.torch_npu_patcher.start()
 
         yield
@@ -117,7 +120,7 @@ class TestHunyuanTransformerConfigWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
@@ -131,10 +134,10 @@ class TestHunyuanTransformerConfigWithMock:
         mock_x_base.get_pad = Mock(return_value=0)
         mock_x_base.set_pad = Mock()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
-        self.torch_npu_patcher = patch.object(torch, 'npu', MockNPUModule())
+        self.torch_npu_patcher = patch.object(torch, "npu", MockNPUModule())
         self.torch_npu_patcher.start()
 
         yield
@@ -157,13 +160,13 @@ class TestAdaLayerNormContinuousWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
         mock_x_base.ParallelManager = MockParallelManager
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
@@ -175,6 +178,7 @@ class TestAdaLayerNormContinuousWithMock:
         """Test AdaLayerNormContinuous can be imported."""
         try:
             from x_diffusers.framework.transformer.hunyuan import AdaLayerNormContinuous
+
             assert AdaLayerNormContinuous is not None
         except ImportError:
             pytest.skip("AdaLayerNormContinuous not available")
@@ -186,17 +190,17 @@ class TestNPUFusionAttentionMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
         mock_x_base.ParallelManager = MockParallelManager
         mock_x_base.attention_manager = MockAttentionManager()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
-        self.torch_npu_patcher = patch.object(torch, 'npu', MockNPUModule())
+        self.torch_npu_patcher = patch.object(torch, "npu", MockNPUModule())
         self.torch_npu_patcher.start()
 
         yield
@@ -241,7 +245,7 @@ class TestParallelManagerIntegrationWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
@@ -253,7 +257,7 @@ class TestParallelManagerIntegrationWithMock:
         mock_x_base.get_pad = Mock(return_value=0)
         mock_x_base.set_pad = Mock()
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
@@ -281,13 +285,13 @@ class TestEncoderProjModesWithMock:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks before each test."""
-        self.npu_patcher = patch.dict(sys.modules, {'torch_npu': MockNPUModule()})
+        self.npu_patcher = patch.dict(sys.modules, {"torch_npu": MockNPUModule()})
         self.npu_patcher.start()
 
         mock_x_base = MagicMock()
         mock_x_base.ParallelManager = MockParallelManager
 
-        self.x_base_patcher = patch.dict(sys.modules, {'x_base': mock_x_base})
+        self.x_base_patcher = patch.dict(sys.modules, {"x_base": mock_x_base})
         self.x_base_patcher.start()
 
         yield
