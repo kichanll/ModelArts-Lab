@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any
 
 from transformers import PreTrainedTokenizerFast
 from vllm.tokenizers import deepseek_v4 as deepseek_v4_tokenizer
-from vllm_ascend.patch.platform import patch_deepseek_v4_thinking as ascend_patch
 
 if TYPE_CHECKING:
     from vllm.entrypoints.openai.chat_completion.protocol import ChatCompletionMessageParam
@@ -180,7 +179,6 @@ def apply_patch() -> None:
 
     deepseek_v4_tokenizer.get_deepseek_v4_tokenizer = _patched_get_deepseek_v4_tokenizer
     deepseek_v4_tokenizer.DeepseekV4Tokenizer.from_pretrained = classmethod(_patched_deepseek_v4_from_pretrained)
-    ascend_patch._patched_get_deepseek_v4_tokenizer = _patched_get_deepseek_v4_tokenizer
 
     _VALIDATION_PATCH_APPLIED = True
 
