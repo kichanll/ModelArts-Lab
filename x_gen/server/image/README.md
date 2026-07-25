@@ -333,9 +333,9 @@ GET /models
 服务内置定时清理功能，在 `image_server.py` 中配置：
 
 ```python
-CLEANUP_INTERVAL_HOURS = 6                            # 清理间隔（小时）
-CLEANUP_RETAIN_DAYS = 7                               # 保留天数
-CLEANUP_ENABLED = True                                # 是否启用清理
+CLEANUP_INTERVAL_HOURS = 6  # 清理间隔（小时）
+CLEANUP_RETAIN_DAYS = 7  # 保留天数
+CLEANUP_ENABLED = True  # 是否启用清理
 ```
 
 ### 工作机制
@@ -353,7 +353,7 @@ CLEANUP_ENABLED = True                                # 是否启用清理
 
 ```python
 HEARTBEAT_INTERVAL_SECONDS = 30  # 心跳间隔（秒）
-HEARTBEAT_ENABLED = True          # 是否启用心跳
+HEARTBEAT_ENABLED = True  # 是否启用心跳
 ```
 
 ### 工作机制
@@ -418,7 +418,7 @@ POST /heartbeat
 from client_example import ImageGenerationClient
 
 # 创建客户端
-client = ImageGenerationClient(host='http://127.0.0.1', port=5000)
+client = ImageGenerationClient(host="http://127.0.0.1", port=5000)
 
 # 检查服务状态
 health = client.health_check()
@@ -426,19 +426,15 @@ print(health)
 
 # 生成图像
 result = client.generate(
-    prompt='A beautiful sunset over the ocean',
-    height=512,
-    width=512,
-    num_inference_steps=20,
-    return_base64=True
+    prompt="A beautiful sunset over the ocean", height=512, width=512, num_inference_steps=20, return_base64=True
 )
 
 # 保存图像
-if result.get('status') == 'success' and 'image_base64' in result:
-    client.save_image_from_base64(result['image_base64'], 'output.png')
+if result.get("status") == "success" and "image_base64" in result:
+    client.save_image_from_base64(result["image_base64"], "output.png")
 
 # 或直接下载
-if 'download_url' in result:
+if "download_url" in result:
     print(f"Download URL: {result['download_url']}")
 ```
 
