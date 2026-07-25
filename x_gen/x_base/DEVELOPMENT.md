@@ -166,6 +166,7 @@ Cache 模块提供两种加速策略：
 
 ```python
 from x_base.cache import cache_on_pipe
+
 # 向后兼容别名
 from x_base.cache import turbo_on_pipe
 
@@ -191,10 +192,10 @@ pipe = turbo_on_pipe(pipe, args)  # 向后兼容
 
 ```python
 from x_base.cache import (
-    CacheStrategy,           # 抽象基类
-    TeaCacheStrategy,        # TeaCache 策略
+    CacheStrategy,  # 抽象基类
+    TeaCacheStrategy,  # TeaCache 策略
     TeaCacheSimpleStrategy,  # 简化版 TeaCache
-    MagCacheStrategy,        # MagCache 策略
+    MagCacheStrategy,  # MagCache 策略
 )
 ```
 
@@ -329,10 +330,10 @@ phaa_on_pipe(pipe, args)
 
 ```python
 from x_base.operator import (
-    attention_manager,       # Attention A8W8 量化
-    matmul_manager,          # Matmul 动态量化
-    rope_manager,            # RoPE 融合算子
-    WeightQuantLinearModule, # 量化线性模块
+    attention_manager,  # Attention A8W8 量化
+    matmul_manager,  # Matmul 动态量化
+    rope_manager,  # RoPE 融合算子
+    WeightQuantLinearModule,  # 量化线性模块
 )
 ```
 

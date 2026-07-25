@@ -111,6 +111,7 @@ for name, param in self.pipe.transformer.named_parameters(recurse=False):
 
 # 多卡设置
 import torch.distributed as dist
+
 group = dist.group.WORLD
 
 from diffusers.pipelines.wan.off_mana import OffloadManager
@@ -122,7 +123,7 @@ offloader = OffloadManager(
     keep_n={"blocks": 1},
     device=torch.device(f"cuda:{dist.get_rank()}"),
     dist_group=group,
-    sync_at_layer=True  # 开启层间同步
+    sync_at_layer=True,  # 开启层间同步
 )
 
 offloader.enable()

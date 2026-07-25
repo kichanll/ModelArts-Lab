@@ -185,8 +185,8 @@ response = requests.post(
         "height": 480,
         "frames": 81,
         "num_inference_steps": 20,
-        "seed": 42
-    }
+        "seed": 42,
+    },
 )
 task_id = response.json()["task_id"]
 
@@ -441,8 +441,8 @@ response = requests.post(
         "height": 480,
         "frames": 81,
         "num_inference_steps": 40,
-        "seed": 42
-    }
+        "seed": 42,
+    },
 )
 task_id = response.json()["task_id"]
 print(f"Task submitted: {task_id}")
