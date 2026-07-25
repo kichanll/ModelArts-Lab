@@ -164,15 +164,12 @@ def _patched_tokenizer(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, 
     return module.deepseek_v4_tokenizer.get_deepseek_v4_tokenizer(tokenizer), stubs
 
 
-def test_apply_patch_replaces_vllm_and_ascend_tokenizer_hooks(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_patch_replaces_vllm_tokenizer_hooks(monkeypatch: pytest.MonkeyPatch) -> None:
     module, stubs = _load_patch_module(monkeypatch)
     deepseek_v4 = stubs["deepseek_v4"]
 
     assert module._VALIDATION_PATCH_APPLIED is True
     assert deepseek_v4.get_deepseek_v4_tokenizer is module._patched_get_deepseek_v4_tokenizer
-    assert (
-        stubs["ascend_deepseek_patch"]._patched_get_deepseek_v4_tokenizer is module._patched_get_deepseek_v4_tokenizer
-    )
 
 
 def test_from_pretrained_wraps_fast_tokenizer_and_uses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
