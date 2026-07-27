@@ -80,7 +80,9 @@ if [ -d "./${VLLM_ASCEND_DIR}" ]; then
   rm -rf "$VLLM_ASCEND_DIR"
 fi
 echo "vllm_ascend_version: ${vllm_ascend_version}"
-git clone -b "${vllm_ascend_version}" https://github.com/vllm-project/vllm-ascend.git --depth 1 "${VLLM_ASCEND_DIR}"
+git clone --depth 1 https://github.com/vllm-project/vllm-ascend.git "${VLLM_ASCEND_DIR}"
+git -C "${VLLM_ASCEND_DIR}" fetch origin "${vllm_ascend_version}"
+git -C "${VLLM_ASCEND_DIR}" checkout FETCH_HEAD
 
 # 安装 vllm patch
 VLLM_PATH=${BUILD_ROOT}/${VLLM_DIR}
