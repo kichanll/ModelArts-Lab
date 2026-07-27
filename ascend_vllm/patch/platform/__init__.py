@@ -2,6 +2,7 @@
 from vllm_ascend.utils import vllm_version_is
 
 from ascend_vllm.patch.platform import patch_health as patch_health
+from ascend_vllm.patch.platform import patch_detokenizer as patch_detokenizer
 
 if vllm_version_is("0.21.0"):
     from ascend_vllm.patch.platform import (
