@@ -9,7 +9,11 @@ from typing import Any, ClassVar
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if (parent / "ascend_vllm").is_dir()
+)
 PATCH_PATH = ROOT / "ascend_vllm" / "patch" / "platform" / "patch_deepseek_v4_tool_call_metadata.py"
 
 
