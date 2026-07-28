@@ -26,3 +26,6 @@ from ascend_vllm.patch.platform import (
 from ascend_vllm.patch.platform import (
     patch_deepseek_v4_validation as patch_deepseek_v4_validation,
 )
+from ascend_vllm.patch.platform import (
+    patch_deepseek_v4_tool_call_metadata as patch_deepseek_v4_tool_call_metadata,
+)
