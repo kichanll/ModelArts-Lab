@@ -5,10 +5,9 @@ import sys
 import types
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import Any, ClassVar
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field
 
 ROOT = Path(__file__).resolve().parents[2]
 PATCH_PATH = ROOT / "ascend_vllm" / "patch" / "platform" / "patch_deepseek_v4_tool_call_metadata.py"
@@ -27,22 +26,50 @@ def _install_vllm_stubs(monkeypatch: pytest.MonkeyPatch):
     engine = _make_package("vllm.entrypoints.openai.engine")
     protocol = types.ModuleType("vllm.entrypoints.openai.engine.protocol")
 
-    class OpenAIBaseModel(BaseModel):
-        model_config = ConfigDict(extra="allow")
+    class ModelStub:
+        """Minimal Pydantic-compatible stub needed by the monkey patch."""
 
-    class DeltaFunctionCall(BaseModel):
-        name: str | None = None
-        arguments: str | None = None
+        field_defaults: ClassVar[dict[str, Any]] = {}
 
-    class DeltaToolCall(OpenAIBaseModel):
-        id: str | None = None
-        type: Literal["function"] | None = None
-        index: int
-        function: DeltaFunctionCall | None = None
+        def __init__(self, **values: Any) -> None:
+            self._fields_set = set(values)
+            for name, default in self.field_defaults.items():
+                value = values.pop(name, default() if callable(default) else default)
+                setattr(self, name, value)
+            for name, value in values.items():
+                setattr(self, name, value)
 
-    class DeltaMessage(OpenAIBaseModel):
-        content: str | None = None
-        tool_calls: list[DeltaToolCall] = Field(default_factory=list)
+        @classmethod
+        def model_validate(cls, values: dict[str, Any]):
+            return cls(**values)
+
+        def model_dump(self, *, exclude_unset: bool = False) -> dict[str, Any]:
+            def serialize(value: Any) -> Any:
+                if isinstance(value, ModelStub):
+                    return value.model_dump(exclude_unset=exclude_unset)
+                if isinstance(value, list):
+                    return [serialize(item) for item in value]
+                return value
+
+            return {
+                name: serialize(getattr(self, name))
+                for name in self.field_defaults
+                if not exclude_unset or name in self._fields_set
+            }
+
+    class DeltaFunctionCall(ModelStub):
+        field_defaults = {"name": None, "arguments": None}
+
+    class DeltaToolCall(ModelStub):
+        field_defaults = {"id": None, "type": None, "index": None, "function": None}
+
+        def __init__(self, **values: Any) -> None:
+            if isinstance(values.get("function"), dict):
+                values["function"] = DeltaFunctionCall(**values["function"])
+            super().__init__(**values)
+
+    class DeltaMessage(ModelStub):
+        field_defaults = {"content": None, "tool_calls": list}
 
     vars(protocol)["DeltaMessage"] = DeltaMessage
     vars(protocol)["DeltaToolCall"] = DeltaToolCall
