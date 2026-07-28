@@ -7,7 +7,7 @@
             {
                 "validator_type": "supported",
                 "subfield": ["messages", "messages.name", "messages.role", "messages.tool_call_id", "messages.tool_calls",
-                             "messages.tool_calls.type", "messages.tool_calls.function", "messages.tool_calls.function.arguments", 
+                             "messages.tool_calls.type", "messages.tool_calls.function", "messages.tool_calls.function.arguments",
                              "messages.tool_calls.function.name", "messages.tool_calls.id", "messages.content", "messages.content.type",
                              "messages.content.text", "messages.prefix"]
             },
@@ -42,7 +42,7 @@
         },
         "tools": {
             "validator_type": "supported",
-            "subfield": ["tools", "tools.function", "tools.function.description", "tools.function.name", "tools.function.parameters", 
+            "subfield": ["tools", "tools.function", "tools.function.description", "tools.function.name", "tools.function.parameters",
                          "tools.function.strict", "tools.type"],
             "skip_check_subfield": ["tools.function.parameters"]
         },
@@ -83,9 +83,6 @@
             "validator_type": "supported"
         },
         "max_completion_tokens": {
-            "validator_type": "supported"
-        },
-        "min_p": {
             "validator_type": "supported"
         },
         "request_id": {
