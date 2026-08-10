@@ -10,9 +10,6 @@ from ascend_vllm.patch.platform import patch_mooncake_connector as patch_mooncak
 
 if vllm_version_is("0.21.0"):
     from ascend_vllm.patch.platform import (
-        patch_disable_completion_tokens_details as patch_disable_completion_tokens_details,
-    )
-    from ascend_vllm.patch.platform import (
         patch_recompute_scheduler as patch_recompute_scheduler,
     )
     from ascend_vllm.patch.platform import (
