@@ -1,26 +1,26 @@
 from __future__ import annotations
 
-import copy
 from typing import TYPE_CHECKING, Any
 
-from transformers import PreTrainedTokenizerFast
 from vllm.tokenizers import deepseek_v4 as deepseek_v4_tokenizer
-from vllm_ascend.patch.platform import patch_deepseek_v4_thinking as ascend_patch
+from vllm_ascend.patch.platform import patch_deepseek_v4_thinking as _ascend_patch  # noqa: F401
 
 if TYPE_CHECKING:
-    from vllm.entrypoints.openai.chat_completion.protocol import ChatCompletionMessageParam
+    from vllm.entrypoints.chat_utils import ChatCompletionMessageParam
+
+_ORIGINAL_GET_DEEPSEEK_V4_TOKENIZER = (
+    deepseek_v4_tokenizer.get_deepseek_v4_tokenizer
+)
 
 _VALIDATION_PATCH_APPLIED = False
 
 
 def _patched_get_deepseek_v4_tokenizer(tokenizer: deepseek_v4_tokenizer.HfTokenizer):
-    dsv4_tokenizer = copy.copy(tokenizer)
+    dsv4_tokenizer = _ORIGINAL_GET_DEEPSEEK_V4_TOKENIZER(tokenizer)
+    tokenizer_cls = type(dsv4_tokenizer)
+    original_apply_chat_template = tokenizer_cls.apply_chat_template
 
-    added_vocab = tokenizer.get_added_vocab()
-    added_vocab_size = len(added_vocab)
-    tokenizer_vocab_size = tokenizer.vocab_size
-
-    class _DeepseekV4Tokenizer(tokenizer.__class__):
+    class _ValidatedDeepseekV4Tokenizer(tokenizer_cls):
         @classmethod
         def validate_messages(cls, messages):
             try:
@@ -101,75 +101,28 @@ def _patched_get_deepseek_v4_tokenizer(tokenizer: deepseek_v4_tokenizer.HfTokeni
             **kwargs,
         ) -> str | list[int]:
             conversation = kwargs.get("conversation", messages)
-            msgs_to_validte = conversation.copy()
+            messages_to_validate = conversation.copy()
 
-            valid, err = self.validate_messages(msgs_to_validte)
+            valid, err = self.validate_messages(messages_to_validate)
             if not valid:
                 raise ValueError(err)
 
-            valid, err = self.validate_sufficient_tools(msgs_to_validte)
+            valid, err = self.validate_sufficient_tools(messages_to_validate)
             if not valid:
                 raise ValueError(err)
 
-            thinking = kwargs.get("thinking", False)
-            enable_thinking = kwargs.get("enable_thinking", False)
-            thinking = thinking or enable_thinking
-            thinking_mode = "thinking" if thinking else "chat"
-
-            messages = conversation.copy()
-            if tools is not None and len(tools) > 0:
-                messages.insert(0, {"role": "system"})
-                messages[0]["tools"] = tools
-
-            reasoning_effort = kwargs.get("reasoning_effort")
-            if not isinstance(reasoning_effort, str):
-                reasoning_effort = None
-            elif reasoning_effort == "none":
-                thinking_mode = "chat"
-                reasoning_effort = None
-            elif reasoning_effort in ("max", "xhigh"):
-                reasoning_effort = "max"
-            else:
-                reasoning_effort = "high"
-
-            prompt_str = deepseek_v4_tokenizer.encode_messages(
+            return original_apply_chat_template(
+                self,
                 messages,
-                thinking_mode=thinking_mode,
-                drop_thinking=kwargs.get("drop_thinking", True),
-                reasoning_effort=reasoning_effort,
+                tools=tools,
+                **kwargs,
             )
 
-            if kwargs.get("tokenize", True):
-                tokenizer_kwargs = {k: kwargs[k] for k in ("truncation", "max_length") if k in kwargs}
-                return self.encode(
-                    prompt_str,
-                    add_special_tokens=False,
-                    **tokenizer_kwargs,
-                )
-
-            return prompt_str
-
-        def num_special_tokens_to_add(self) -> int:
-            return len(self.encode(""))
-
-        def __len__(self) -> int:
-            return tokenizer_vocab_size + added_vocab_size
-
-        def get_added_vocab(self) -> dict[str, int]:
-            return added_vocab.copy()
-
-        def __reduce__(self):
-            return _patched_get_deepseek_v4_tokenizer, (tokenizer,)
-
-    _DeepseekV4Tokenizer.__name__ = f"DSV4{tokenizer.__class__.__name__}"
-
-    dsv4_tokenizer.__class__ = _DeepseekV4Tokenizer
+    _ValidatedDeepseekV4Tokenizer.__name__ = (
+        f"Validated{tokenizer_cls.__name__}"
+    )
+    dsv4_tokenizer.__class__ = _ValidatedDeepseekV4Tokenizer
     return dsv4_tokenizer
-
-
-def _patched_deepseek_v4_from_pretrained(cls, *args, **kwargs):
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(*args, **kwargs)
-    return deepseek_v4_tokenizer.get_cached_tokenizer(_patched_get_deepseek_v4_tokenizer(tokenizer))
 
 
 def apply_patch() -> None:
@@ -178,9 +131,9 @@ def apply_patch() -> None:
     if _VALIDATION_PATCH_APPLIED:
         return
 
-    deepseek_v4_tokenizer.get_deepseek_v4_tokenizer = _patched_get_deepseek_v4_tokenizer
-    deepseek_v4_tokenizer.DeepseekV4Tokenizer.from_pretrained = classmethod(_patched_deepseek_v4_from_pretrained)
-    ascend_patch._patched_get_deepseek_v4_tokenizer = _patched_get_deepseek_v4_tokenizer
+    deepseek_v4_tokenizer.get_deepseek_v4_tokenizer = (
+        _patched_get_deepseek_v4_tokenizer
+    )
 
     _VALIDATION_PATCH_APPLIED = True
 
