@@ -10,13 +10,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-PATCH_PATH = (
-    ROOT
-    / "ascend_vllm"
-    / "patch"
-    / "platform"
-    / "patch_deepseek_v4_validation.py"
-)
+PATCH_PATH = ROOT / "ascend_vllm" / "patch" / "platform" / "patch_deepseek_v4_validation.py"
 
 
 class _FakeTokenizer:
@@ -59,27 +53,17 @@ def _install_external_dependency_stubs(
         return tokenizer
 
     vars(deepseek_v4)["HfTokenizer"] = _FakeTokenizer
-    vars(deepseek_v4)[
-        "get_deepseek_v4_tokenizer"
-    ] = original_get_deepseek_v4_tokenizer
+    vars(deepseek_v4)["get_deepseek_v4_tokenizer"] = original_get_deepseek_v4_tokenizer
     vars(tokenizers)["deepseek_v4"] = deepseek_v4
 
     vllm_ascend = _make_package("vllm_ascend")
     vllm_ascend_patch = _make_package("vllm_ascend.patch")
-    vllm_ascend_patch_platform = _make_package(
-        "vllm_ascend.patch.platform"
-    )
-    ascend_deepseek_patch = types.ModuleType(
-        "vllm_ascend.patch.platform.patch_deepseek_v4_thinking"
-    )
+    vllm_ascend_patch_platform = _make_package("vllm_ascend.patch.platform")
+    ascend_deepseek_patch = types.ModuleType("vllm_ascend.patch.platform.patch_deepseek_v4_thinking")
 
     ascend_original_hook = object()
-    vars(ascend_deepseek_patch)[
-        "_patched_get_deepseek_v4_tokenizer"
-    ] = ascend_original_hook
-    vars(vllm_ascend_patch_platform)[
-        "patch_deepseek_v4_thinking"
-    ] = ascend_deepseek_patch
+    vars(ascend_deepseek_patch)["_patched_get_deepseek_v4_tokenizer"] = ascend_original_hook
+    vars(vllm_ascend_patch_platform)["patch_deepseek_v4_thinking"] = ascend_deepseek_patch
 
     monkeypatch.setitem(sys.modules, "vllm", vllm)
     monkeypatch.setitem(sys.modules, "vllm.tokenizers", tokenizers)
@@ -119,10 +103,7 @@ def _load_patch_module(
 ) -> tuple[Any, dict[str, Any]]:
     stubs = _install_external_dependency_stubs(monkeypatch)
 
-    module_name = (
-        f"patch_deepseek_v4_validation_under_test_"
-        f"{uuid.uuid4().hex}"
-    )
+    module_name = f"patch_deepseek_v4_validation_under_test_{uuid.uuid4().hex}"
     spec = importlib.util.spec_from_file_location(
         module_name,
         PATCH_PATH,
@@ -143,11 +124,7 @@ def _patched_tokenizer(
     module, stubs = _load_patch_module(monkeypatch)
 
     source_tokenizer = _FakeTokenizer()
-    tokenizer = (
-        module.deepseek_v4_tokenizer.get_deepseek_v4_tokenizer(
-            source_tokenizer
-        )
-    )
+    tokenizer = module.deepseek_v4_tokenizer.get_deepseek_v4_tokenizer(source_tokenizer)
 
     assert tokenizer is source_tokenizer
     return module, tokenizer, stubs
@@ -160,22 +137,11 @@ def test_apply_patch_wraps_only_vllm_getter(
     deepseek_v4 = stubs["deepseek_v4"]
 
     assert module._VALIDATION_PATCH_APPLIED is True
-    assert (
-        module._ORIGINAL_GET_DEEPSEEK_V4_TOKENIZER
-        is stubs["original_get"]
-    )
-    assert (
-        deepseek_v4.get_deepseek_v4_tokenizer
-        is module._patched_get_deepseek_v4_tokenizer
-    )
+    assert module._ORIGINAL_GET_DEEPSEEK_V4_TOKENIZER is stubs["original_get"]
+    assert deepseek_v4.get_deepseek_v4_tokenizer is module._patched_get_deepseek_v4_tokenizer
 
     # ModelArts 不再覆盖 vllm-ascend 的私有 hook。
-    assert (
-        stubs[
-            "ascend_deepseek_patch"
-        ]._patched_get_deepseek_v4_tokenizer
-        is stubs["ascend_original_hook"]
-    )
+    assert stubs["ascend_deepseek_patch"]._patched_get_deepseek_v4_tokenizer is stubs["ascend_original_hook"]
 
     # 重复调用 apply_patch 不应该再次包装。
     patched_getter = deepseek_v4.get_deepseek_v4_tokenizer
@@ -293,7 +259,7 @@ def test_apply_chat_template_rejects_mismatched_tool_call_id(
 ) -> None:
     _, tokenizer, _ = _patched_tokenizer(monkeypatch)
 
-    messages = [
+    messages: list[dict[str, Any]] = [
         {
             "role": "assistant",
             "tool_calls": [
@@ -323,7 +289,7 @@ def test_apply_chat_template_accepts_matching_tool_responses(
 ) -> None:
     _, tokenizer, _ = _patched_tokenizer(monkeypatch)
 
-    messages = [
+    messages: list[dict[str, Any]] = [
         {
             "role": "assistant",
             "tool_calls": [
@@ -358,9 +324,7 @@ def test_apply_chat_template_accepts_matching_tool_responses(
 
     assert result == "original-result"
     assert tokenizer.apply_calls[0]["messages"] == messages
-    assert tokenizer.apply_calls[0]["kwargs"] == {
-        "reasoning_effort": "high"
-    }
+    assert tokenizer.apply_calls[0]["kwargs"] == {"reasoning_effort": "high"}
 
 
 def test_apply_chat_template_accepts_terminal_assistant_prefix(
@@ -368,7 +332,7 @@ def test_apply_chat_template_accepts_terminal_assistant_prefix(
 ) -> None:
     _, tokenizer, _ = _patched_tokenizer(monkeypatch)
 
-    messages = [
+    messages: list[dict[str, Any]] = [
         {"role": "user", "content": "hello"},
         {
             "role": "assistant",
@@ -400,7 +364,5 @@ def test_apply_chat_template_validates_conversation_kwarg(
             conversation=conversation,
         )
 
-    assert "system message can only be the first message" in str(
-        exc_info.value
-    )
+    assert "system message can only be the first message" in str(exc_info.value)
     assert tokenizer.apply_calls == []

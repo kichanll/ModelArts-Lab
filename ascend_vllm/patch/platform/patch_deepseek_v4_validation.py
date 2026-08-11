@@ -8,9 +8,7 @@ from vllm_ascend.patch.platform import patch_deepseek_v4_thinking as _ascend_pat
 if TYPE_CHECKING:
     from vllm.entrypoints.chat_utils import ChatCompletionMessageParam
 
-_ORIGINAL_GET_DEEPSEEK_V4_TOKENIZER = (
-    deepseek_v4_tokenizer.get_deepseek_v4_tokenizer
-)
+_ORIGINAL_GET_DEEPSEEK_V4_TOKENIZER = deepseek_v4_tokenizer.get_deepseek_v4_tokenizer
 
 _VALIDATION_PATCH_APPLIED = False
 
@@ -118,9 +116,7 @@ def _patched_get_deepseek_v4_tokenizer(tokenizer: deepseek_v4_tokenizer.HfTokeni
                 **kwargs,
             )
 
-    _ValidatedDeepseekV4Tokenizer.__name__ = (
-        f"Validated{tokenizer_cls.__name__}"
-    )
+    _ValidatedDeepseekV4Tokenizer.__name__ = f"Validated{tokenizer_cls.__name__}"
     dsv4_tokenizer.__class__ = _ValidatedDeepseekV4Tokenizer
     return dsv4_tokenizer
 
@@ -131,9 +127,7 @@ def apply_patch() -> None:
     if _VALIDATION_PATCH_APPLIED:
         return
 
-    deepseek_v4_tokenizer.get_deepseek_v4_tokenizer = (
-        _patched_get_deepseek_v4_tokenizer
-    )
+    deepseek_v4_tokenizer.get_deepseek_v4_tokenizer = _patched_get_deepseek_v4_tokenizer
 
     _VALIDATION_PATCH_APPLIED = True
 
