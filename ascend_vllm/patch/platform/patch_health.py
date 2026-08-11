@@ -153,6 +153,21 @@ def _get_allow_lists():
     return npu_health_level_allow_list, error_code_allow_list
 
 
+def _get_health_check_devices():
+    health_check_devices_str: str = os.getenv("ASCEND_GLOBAL_VISIBLE_DEVICES", "").lower().strip()
+    if not health_check_devices_str:
+        # 没设置或为空，返回None表示检查所有设备
+        return None
+    # 分割 + trim + 过滤空字符串
+    devices = set()
+    for device in health_check_devices_str.split(","):
+        device = device.strip()
+        if device:
+            devices.add(device)
+
+    return devices if devices else None
+
+
 def _check_npu_resource(npu, npu_health_level_allow_list, error_code_allow_list):
     """检查单个 NPU 资源"""
     if "errLevel" not in npu or "errCodes" not in npu:
@@ -182,19 +197,34 @@ def _check_l1_1520_resource(resource):
     return NPUStatusInfo.HEALTH
 
 
-def _check_all_resources(resources, npu_health_level_allow_list, error_code_allow_list):
+def _check_all_resources(resources, npu_health_level_allow_list, error_code_allow_list, health_check_devices):
     """检查所有资源"""
     for resource in resources:
-        check_res = _single_resource_check(resource, npu_health_level_allow_list, error_code_allow_list)
+        check_res = _single_resource_check(
+            resource, npu_health_level_allow_list, error_code_allow_list, health_check_devices
+        )
         if check_res != NPUStatusInfo.HEALTH:
             return check_res
     return NPUStatusInfo.HEALTH
 
 
-def _single_resource_check(resource, npu_health_level_allow_list, error_code_allow_list):
+def _single_resource_check(resource, npu_health_level_allow_list, error_code_allow_list, health_check_devices):
     if resource["type"].lower() == "npu":
         status = resource.get("status", [])
         for npu in status:
+            name = npu.get("name")
+            name_str = str(name).lower().strip() if name is not None else ""
+            if not name_str:
+                if health_check_devices:
+                    continue
+                res = _check_npu_resource(npu, npu_health_level_allow_list, error_code_allow_list)
+                if res != NPUStatusInfo.HEALTH:
+                    return res
+                continue
+
+            if health_check_devices and name_str not in health_check_devices:
+                continue
+
             res = _check_npu_resource(npu, npu_health_level_allow_list, error_code_allow_list)
             if res != NPUStatusInfo.HEALTH:
                 return res
@@ -218,9 +248,12 @@ def check_npu_status() -> int:
     # 获取白名单
     npu_health_level_allow_list, error_code_allow_list = _get_allow_lists()
 
+    # 获取待健康检查设备
+    health_check_devices = _get_health_check_devices()
+
     # 检查所有资源
     resources = npu_status.get("resources", [])
-    return _check_all_resources(resources, npu_health_level_allow_list, error_code_allow_list)
+    return _check_all_resources(resources, npu_health_level_allow_list, error_code_allow_list, health_check_devices)
 
 
 def apply_health_patches() -> None:
