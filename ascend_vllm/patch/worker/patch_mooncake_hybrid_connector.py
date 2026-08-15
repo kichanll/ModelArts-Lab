@@ -103,7 +103,8 @@ def _patch_mooncake_hybrid_connector() -> None:
 
     def connector_get_block_ids_with_load_errors(self) -> set[int]:
         """Forward load errors from the connector facade to the worker."""
-        assert self.connector_worker is not None
+        if self.connector_worker is None:
+            return set()
         return self.connector_worker.get_block_ids_with_load_errors()
 
     def worker_get_block_ids_with_load_errors(self) -> set[int]:
