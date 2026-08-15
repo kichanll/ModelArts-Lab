@@ -96,6 +96,9 @@
         },
         "thinking_token_budget":{
             "validator_type": "supported"
+        },
+        "reasoning_effort":{
+            "validator_type": "supported"
         }
     },
     "validators_json": {
