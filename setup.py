@@ -24,7 +24,7 @@ setup(
     entry_points={
         "vllm.platform_plugins": ["ascend_vllm = ascend_vllm:register"],
         "vllm.general_plugins": [
-            "ascend_kv_connector = ascend_vllm:register_connector",
+            "modelarts_ascend_kv_connector = ascend_vllm:register_connector",
             "ascend_model_loader = ascend_vllm:register_model_loader",
             "ascend_service_profiling = ascend_vllm:register_service_profiling",
             "ascend_model = ascend_vllm:register_model",
