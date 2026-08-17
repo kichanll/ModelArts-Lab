@@ -117,6 +117,11 @@ def _build_logging_config(log_file_name: str) -> dict[str, Any]:
                 "level": VLLM_LOGGING_LEVEL,
                 "propagate": False,
             },
+            "uvicorn.access": {
+                "handlers": ["vllm", "console"],
+                "level": VLLM_LOGGING_LEVEL,
+                "propagate": False,
+            },
         },
         "version": 1,
         "disable_existing_loggers": False,
