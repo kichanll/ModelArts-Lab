@@ -37,9 +37,27 @@ def register():
 def register_connector():
     _ensure_global_patch()
 
-    from vllm_ascend.distributed.kv_transfer import register_connector
+    from vllm.distributed.kv_transfer.kv_connector.factory import (
+        KVConnectorFactory,
+    )
+    from vllm_ascend.distributed.kv_transfer import (
+        register_connector as register_ascend_connector,
+    )
 
-    register_connector()
+    register_ascend_connector()
+
+    def load_patched_mooncake():
+        from vllm_ascend.distributed.kv_transfer.kv_p2p.mooncake_hybrid_connector import (
+            MooncakeConnector,
+        )
+
+        from ascend_vllm.patch.worker import (
+            patch_mooncake_hybrid_connector,  # noqa: F401
+        )
+
+        return MooncakeConnector
+
+    KVConnectorFactory._registry["MooncakeHybridConnector"] = load_patched_mooncake
 
 
 def register_model_loader():
@@ -68,13 +86,7 @@ def register_model():
 
 def register_kv_failure_patch():
     """Load patches for Mooncake KV load failure reporting and recovery."""
-    # The KV failure fix spans both scheduler and worker processes:
-    # scheduler handles invalid KV blocks, while worker reports Mooncake KV
-    # load failures from the decode recv thread. This function is called from a
-    # vllm.general_plugins entry point so both sides can be patched in the
-    # processes where vLLM loads general plugins.
     from ascend_vllm.patch.platform import patch_recompute_scheduler  # noqa: F401
-    from ascend_vllm.patch.worker import patch_mooncake_hybrid_connector  # noqa: F401
 
 
 def register_general_plugin_patch():
