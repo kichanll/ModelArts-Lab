@@ -93,3 +93,4 @@ def register_general_plugin_patch():
     """Load ModelArts patches that require vLLM general-plugin timing."""
     register_kv_failure_patch()
     from ascend_vllm.patch.platform import patch_scheduler  # noqa: F401
+    from ascend_vllm.patch.platform import worker  # noqa: F401
