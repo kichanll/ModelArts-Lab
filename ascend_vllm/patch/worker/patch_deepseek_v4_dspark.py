@@ -13,8 +13,7 @@ from vllm.distributed import (
 )
 from vllm.logger import logger
 from vllm.model_executor.model_loader.weight_utils import default_weight_loader
-
-from vllm_ascend.models.deepseek_v4_dspark import DSparkDeepseekV4ForCausalLM, _EXPERT_SCALE_RE
+from vllm_ascend.models.deepseek_v4_dspark import _EXPERT_SCALE_RE, DSparkDeepseekV4ForCausalLM
 
 
 def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:

@@ -6,7 +6,6 @@ from __future__ import annotations
 import torch
 import torch_npu
 from vllm.distributed import tensor_model_parallel_all_reduce
-
 from vllm_ascend.ascend_forward_context import _EXTRA_CTX, MoECommType
 from vllm_ascend.ops.fused_moe.fused_moe import AscendMoERunner, FusedMoEEvents
 from vllm_ascend.quantization.quant_type import QuantType

@@ -7,9 +7,8 @@ import json
 import os
 from typing import Any
 
-from vllm.platforms.interface import get_assigned_physical_gpu_ids
-
 import vllm_ascend.utils as _utils_module
+from vllm.platforms.interface import get_assigned_physical_gpu_ids
 
 
 def setup_ascend_local_comm_res(local_rank: int, kv_transfer_config: Any | None) -> None:
