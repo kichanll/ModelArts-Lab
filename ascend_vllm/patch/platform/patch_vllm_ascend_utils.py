@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
-import os
 import json
+import os
 from typing import Any
+
 from vllm.platforms.interface import get_assigned_physical_gpu_ids
 
 import vllm_ascend.utils as _utils_module

@@ -15,7 +15,7 @@ from ascend_vllm.patch.platform import (
 from ascend_vllm.patch.platform import (
     patch_recompute_scheduler as patch_recompute_scheduler,
 )
-from ascend_vllm.patch.platform import patch_vllm_registry
+from ascend_vllm.patch.platform import patch_vllm_registry as patch_vllm_registry
 
 if get_ascend_device_type() == AscendDeviceType.A5 and vllm_version_is("0.25.1"):
-    from ascend_vllm.patch.platform import patch_vllm_ascend_utils
+    from ascend_vllm.patch.platform import patch_vllm_ascend_utils as patch_vllm_ascend_utils

@@ -3,20 +3,18 @@
 
 from __future__ import annotations
 
-import typing
-
 import torch
 import torch_npu
 from vllm.distributed import tensor_model_parallel_all_reduce
 
 from vllm_ascend.ascend_forward_context import _EXTRA_CTX, MoECommType
+from vllm_ascend.ops.fused_moe.fused_moe import AscendMoERunner, FusedMoEEvents
 from vllm_ascend.quantization.quant_type import QuantType
 from vllm_ascend.utils import (
     npu_stream_switch,
     shared_expert_dp_enabled,
     shared_experts_calculation_stream,
 )
-from vllm_ascend.ops.fused_moe.fused_moe import AscendMoERunner, FusedMoEEvents
 
 
 def _forward_shared_experts(self, hidden_states: torch.Tensor, fused_moe_evts: FusedMoEEvents):
