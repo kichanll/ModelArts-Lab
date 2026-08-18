@@ -8,6 +8,7 @@ from vllm_ascend.utils import (
 from ascend_vllm.patch.worker import (
     patch_mooncake_hybrid_connector as patch_mooncake_hybrid_connector,
 )
+
 if get_ascend_device_type() == AscendDeviceType.A5 and vllm_version_is("0.25.1"):
     from ascend_vllm.patch.worker import patch_deepseek_v4_dspark
     from ascend_vllm.patch.worker import patch_fused_moe

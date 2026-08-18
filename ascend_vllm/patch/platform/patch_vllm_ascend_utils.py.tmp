@@ -23,7 +23,6 @@ def setup_ascend_local_comm_res(local_rank: int, kv_transfer_config: Any | None)
         visible_devices = os.getenv("ASCEND_RT_VISIBLE_DEVICES")
         if visible_devices is None:
             from vllm_ascend.cpu_binding import DeviceInfo
-
             devices = sorted([int(x) for x in DeviceInfo.get_npu_map_info()])
         else:
             devices = [int(x) for x in visible_devices.split(",") if x.strip()]
@@ -52,6 +51,5 @@ def setup_ascend_local_comm_res(local_rank: int, kv_transfer_config: Any | None)
         raise ValueError(f"Failed to parse endpoint config file: {local_comm_res_file}") from e
 
     os.environ["ASCEND_LOCAL_COMM_RES"] = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-
 
 _utils_module.setup_ascend_local_comm_res = setup_ascend_local_comm_res

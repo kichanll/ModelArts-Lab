@@ -107,9 +107,9 @@ def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
             # Skip params not in model
             if name not in params_dict:
                 logger.warning_once(
-                    "DSpark: skip loading %s - not in model params (likely quantization scale for unquantized layer)",
-                    name,
-                )
+                    "DSpark: skip loading %s - not in model params "
+                    "(likely quantization scale for unquantized layer)",
+                    name)
                 continue
             param = params_dict[name]
             weight_loader = getattr(param, "weight_loader", default_weight_loader)
@@ -118,6 +118,5 @@ def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
 
     logger.info_once("DSpark draft model loaded: %d params", len(loaded_params))
     return loaded_params
-
 
 DSparkDeepseekV4ForCausalLM.load_weights = load_weights
