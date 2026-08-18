@@ -1,5 +1,5 @@
 [tool.ascend_vllm.dependencies]
-vllm_version = "v0.25.0"
+vllm_version = "v0.25.1"
 vllm_ascend_version = "releases/v0.25.1rc"
 
 [tool.ruff]
