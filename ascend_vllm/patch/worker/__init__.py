@@ -8,6 +8,15 @@ from vllm_ascend.utils import (
 from ascend_vllm.patch.worker import (
     patch_mooncake_hybrid_connector as patch_mooncake_hybrid_connector,
 )
+from ascend_vllm.patch.worker import (
+    patch_dspark_proposer as patch_dspark_proposer,
+)
+from ascend_vllm.patch.worker import (
+    patch_spec_decode_draft as patch_spec_decode_draft,
+)
+from ascend_vllm.patch.worker import (
+    patch_spec_decode_utils as patch_spec_decode_utils,
+)
 
 if get_ascend_device_type() == AscendDeviceType.A5 and vllm_version_is("0.25.1"):
     from ascend_vllm.patch.worker import patch_deepseek_v4_dspark as patch_deepseek_v4_dspark
