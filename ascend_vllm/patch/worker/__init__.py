@@ -12,7 +12,7 @@ from ascend_vllm.patch.worker import (
     patch_dspark_proposer as patch_dspark_proposer,
 )
 from ascend_vllm.patch.worker import (
-    patch_spec_decode_draft as patch_spec_decode_draft,
+    patch_spec_decode_drafter as patch_spec_decode_drafter,
 )
 from ascend_vllm.patch.worker import (
     patch_spec_decode_utils as patch_spec_decode_utils,
