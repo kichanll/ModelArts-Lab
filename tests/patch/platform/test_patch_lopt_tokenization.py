@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import logging
 import sys
@@ -84,6 +85,9 @@ class _StubRenderer:
         raise NotImplementedError
 
     def _tokenize_prompt(self, prompt: Any, params: Any) -> Any:
+        raise NotImplementedError
+
+    async def _tokenize_prompt_async(self, prompt: Any, params: Any) -> Any:
         raise NotImplementedError
 
 
@@ -287,6 +291,48 @@ def test_return_token_offsets_defers_to_standard(monkeypatch: pytest.MonkeyPatch
         {"prompt": "a sufficiently long prompt"},
         _ParamsWithOffsets(),
         fallback,
+    )
+
+    assert result is fallback_result
+    assert lopt.encoded_texts == []
+
+
+def test_deepseek_v4_async_tokenization_uses_lopt(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _ = _load_patch_module(monkeypatch)
+
+    lopt = _FakeLopt()
+    renderer = SimpleNamespace(_ascend_lopt_tokenizer=lopt, _executor=None)
+
+    result = asyncio.run(
+        module._patched_deepseek_v4_renderer_tokenize_prompt_async(
+            renderer,
+            {"prompt": "a sufficiently long prompt"},
+            _Params(),
+        )
+    )
+
+    assert result["prompt_token_ids"] == [11, 12, 13]
+    assert lopt.encoded_texts == ["a sufficiently long prompt"]
+
+
+def test_deepseek_v4_async_tokenization_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _ = _load_patch_module(monkeypatch)
+
+    lopt = _FakeLopt(usable=False)
+    renderer = SimpleNamespace(_ascend_lopt_tokenizer=lopt, _executor=None)
+    fallback_result = {"prompt": "short", "prompt_token_ids": [99]}
+
+    async def fallback(renderer, prompt, params):
+        return fallback_result
+
+    monkeypatch.setattr(module, "_original_deepseek_v4_renderer_tokenize_prompt_async", fallback)
+
+    result = asyncio.run(
+        module._patched_deepseek_v4_renderer_tokenize_prompt_async(
+            renderer,
+            {"prompt": "short"},
+            _Params(),
+        )
     )
 
     assert result is fallback_result
